@@ -2,7 +2,7 @@
 
 **Holger guards your artifacts at rest.**
 
-Immutable Rust-based artifact airgaper. Holger ingests language-specific package trees and serves them over standardized APIs, just like Artifactory or Nexus — but with an airgapped, append-only backend called **Artisan** based on Znippy archives.
+Immutable Rust-based artifact airgaper. Holger ingests language-specific package trees and serves them over standardized APIs, just like Artifactory or Nexus — but with an airgapped, append-only backend called **Artisan**, based on Znippy archives.
 
 ## Overview
 
@@ -19,6 +19,20 @@ When airgapping environments, your company saves offline packages using native l
 These folders are archived into a `.znippy` file by the Znippy CLI. The resulting `.znippy` file is immutable and can be verified using Blake3 checksums.
 
 The Holger service reads this `.znippy` archive and exposes one virtual API endpoint per language. Internally, the `.znippy` file is parsed into one Arrow-based table per language, collectively called an `.artisan` file. Holger uses this file to respond to requests from tools like Cargo, pip, Maven and Go.
+
+## Holger Serving Modes
+
+All `.artisan` files are immutable. However, Holger can optionally be configured to allow **live ingest** of artifacts not found in the current `.artisan`. This is primarily useful in DEV environments.
+
+| Mode | Source                   | Update Capability         | Use Case                           |
+| ---- | ------------------------ | ------------------------- | ---------------------------------- |
+| V1   | Initial .artisan import  | Immutable                 | Bootstrap, base snapshot           |
+| V2   | .artisan + live ingest   | Yes (in-memory + RocksDB) | DEV: allow dynamic additions       |
+| V3   | Promoted `.artisan` only | Immutable                 | PROD: strict airgapped enforcement |
+
+- V2 allows development-time fetches from upstream sources (e.g. crates.io, PyPI) and caches them.
+- V3 is the result of promoting selected artifacts from V2 into a new `.artisan` file.
+- Live proxy mode can be disabled completely in strict environments.
 
 ## Architecture
 
@@ -71,7 +85,6 @@ ARTISAN_V3 --> CARGO_prod
 ARTISAN_V3 --> PIP_prod
 ARTISAN_V3 --> MAVEN_prod
 ARTISAN_V3 --> GOPROXY_prod
-
 ```
 
 ## Status
@@ -79,6 +92,6 @@ ARTISAN_V3 --> GOPROXY_prod
 - ✅ Znippy archive ingestion
 - ✅ Arrow-based indexing
 - ✅ Immutable .artisan output
-- 🔧 API servers in progress
-- 🛡 Blake3 verification in place
+- ⛖ API servers in progress
+- 🚽 Blake3 verification in place
 
