@@ -94,4 +94,50 @@ ARTISAN_V3 --> GOPROXY_prod
 - ✅ Immutable .artisan output
 - ⛖ API servers in progress
 - 🚽 Blake3 verification in place
+- 
 
+## Mindmapping ..
+```mermaid
+
+flowchart TD
+
+%% Konfiguration
+subgraph Config
+    CFG[holger.yaml]
+end
+
+%% Repos
+subgraph Repositories
+    Hosted1[Hosted Repo\nname: java-test\nmode: .artisan + live\nformat: Java]
+    Hosted2[Hosted Repo\nname: rust-prod\nmode: .artisan only\nformat: Rust]
+    Proxy1[Proxy Repo\nname: maven-central\nURL: mirror]
+    Agg1[Aggregated Repo\nname: all-java\nincludes: java-test and maven-central]
+end
+
+%% Komponenter
+subgraph HolgerCore
+    CLI[CLI and REST API]
+    Promote[Ingest and Promote Service]
+    Access[Artifact Access API]
+    Merge[Znippy Merger\nmerging and dependency resolution]
+end
+
+%% Metadata
+subgraph ArtifactLayer
+    Artifact[Artifact\nUUIDv7 and checksums\nplus type metadata]
+    DepGraph[Dependency Graph\nUUID-based DAG]
+end
+
+%% Flöden
+CLI --> Promote
+CLI --> Access
+Promote -->|uses| Repositories
+Access -->|uses| Repositories
+Repositories --> Artifact
+Repositories --> DepGraph
+Merge --> Promote
+Artifact --> Merge
+DepGraph --> Promote
+CFG --> Repositories
+
+```
