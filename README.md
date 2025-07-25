@@ -39,23 +39,39 @@ JAVA --> ZNIPPY
 GO --> ZNIPPY
 
 %% Step 2: Holger Ingestion
-ZNIPPY --> HOLGER["🛡 Holger Service"]
-
-%% Artisan Format Output
-HOLGER --> ARTISAN["📚 .artisan (Immutable Archive)"]
-
-%% Step 3: Holger Serving via APIs
-subgraph Holger_API_Endpoints
-    CARGO["Cargo Git+HTTP"]
-    PIP["PyPI Simple API"]
-    MAVEN["Maven Repo API"]
-    GOPROXY["Golang Proxy Mode"]
+subgraph Holger_Processing
+    INPUTAPI["Holger INPUT api/"] --> HOLGER["🛡 Holger Ingest & Promote Service"]
+    ZNIPPY --> HOLGER
+    HOLGER --> ARTISAN_V1["📚 .artisan v1"]
+    HOLGER --> ARTISAN_V2["📚 .artisan v2"]
+    HOLGER --> ARTISAN_V3["📚 .artisan v3"]
 end
 
-ARTISAN --> CARGO
-ARTISAN --> PIP
-ARTISAN --> MAVEN
-ARTISAN --> GOPROXY
+%% Step 3: Holger Serving via APIs
+subgraph Holger DEV _API_Endpoints
+    CARGO_dev["Cargo Git+HTTP"]
+    PIP_dev["PyPI Simple API"]
+    MAVEN_dev["Maven Repo API"]
+    GOPROXY_dev["Golang Proxy Mode"]
+end
+
+subgraph HolgerPROD _API_Endpoints
+    CARGO_prod["Cargo Git+HTTP"]
+    PIP_prod["PyPI Simple API"]
+    MAVEN_prod["Maven Repo API"]
+    GOPROXY_prod["Golang Proxy Mode"]
+end
+
+ARTISAN_V2 --> CARGO_dev
+ARTISAN_V2 --> PIP_dev
+ARTISAN_V2 --> MAVEN_dev
+ARTISAN_V2 --> GOPROXY_dev
+
+ARTISAN_V3 --> CARGO_prod
+ARTISAN_V3 --> PIP_prod
+ARTISAN_V3 --> MAVEN_prod
+ARTISAN_V3 --> GOPROXY_prod
+
 ```
 
 ## Status
