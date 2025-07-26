@@ -24,7 +24,7 @@ The Holger service reads this `.znippy` archive and exposes one virtual API endp
 
 All `.artisan` files are immutable. However, Holger can optionally be configured to allow **live ingest** of artifacts not found in the current `.artisan`. This is primarily useful in DEV environments.
 
-| Mode | Source                   | Update Capability         | Use Case                           |
+| History | Source                   | Update Capability         | Use Case                           |
 | ---- | ------------------------ | ------------------------- | ---------------------------------- |
 | V1   | Initial .artisan import  | Immutable                 | Bootstrap, base snapshot           |
 | V2   | .artisan + live ingest   | Yes (in-memory + RocksDB) | DEV: allow dynamic additions       |
