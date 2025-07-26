@@ -1,0 +1,28 @@
+{
+  "exposed_endpoints": [
+    {
+      "name": "prod",
+      "url_prefix": "http://10.1.2.10/"
+    }
+  ],
+  "storage_endpoints": [
+    {
+      "name": "artifact-prod",
+      "type": "znippy",
+      "location": "local",
+      "path": "/var/lib/holger/rust-prod/",
+      "supports_random_read": true
+    }
+  ],
+  "repositories": [
+    {
+      "name": "rust-prod",
+      "type": "rust",
+      "accept_unpublished": false,
+      "out": {
+        "storage_backend": "artifact-prod",
+        "endpoints": ["prod"]
+      }
+    }
+  ]
+}

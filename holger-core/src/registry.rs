@@ -1,71 +1,54 @@
+use crate::config::load_config_from_path;
+use crate::repo::{Repository, RustRepo};
+use crate::storage::{ResolvedStorage};
+use crate::types::{HolgerConfig, RepositoryType};
+
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
 
-use crate::config::{HolgerConfig, StorageBackendConfig};
-use crate::storage::{ResolvedStorage, StorageKind};
-use crate::repo::{RepositoryInstance};
-use crate::types::{StorageBackendType};
+/// Load and instantiate all repositories from a given config file
+pub fn load_registry(path: &Path) -> Result<Vec<Arc<dyn Repository>>> {
+    let config: HolgerConfig = load_config_from_path(path)?;
 
-pub struct RepositoryRegistry {
-    pub repositories: HashMap<String, RepositoryInstance>,
-    pub storage_backends: HashMap<String, ResolvedStorage>,
-}
+    // Step 1: Build map of storage backends
+    let mut storage_map = HashMap::<String, ResolvedStorage>::new();
+    for s in &config.storage_endpoints {
+        let resolved = ResolvedStorage::from_config(s)?;
+        storage_map.insert(s.name.clone(), resolved);
+    }
 
-impl RepositoryRegistry {
-    pub fn from_config(config: HolgerConfig) -> Self {
-        // Förbered storage-backends
-        let storage_backends: HashMap<String, ResolvedStorage> = config
-            .storage_endpoints
-            .into_iter()
-            .map(|s| {
-                let name = s.name.clone();
-                let resolved = match s.r#type {
-                    StorageBackendType::Znippy { path, supports_random_read } => ResolvedStorage {
-                        name: name.clone(),
-                        kind: StorageKind::Znippy { path },
-                        supports_random_read,
-                    },
-                    StorageBackendType::RocksDb { path, supports_random_read } => ResolvedStorage {
-                        name: name.clone(),
-                        kind: StorageKind::RocksDb { path },
-                        supports_random_read,
-                    },
-                    StorageBackendType::S3 { bucket, prefix, supports_random_read } => ResolvedStorage {
-                        name: name.clone(),
-                        kind: StorageKind::S3 { bucket, prefix },
-                        supports_random_read,
-                    },
-                };
-                (name, resolved)
-            })
-            .collect();
+    // Step 2: Instantiate all repositories
+    let mut repo_instances: Vec<Arc<dyn Repository>> = Vec::new();
 
-        let resolve = |name: &str| -> ResolvedStorage {
-            storage_backends
-                .get(name)
-                .expect(&format!("Storage backend '{}' not found", name))
-                .clone()
+    for r in &config.repositories {
+        let in_backend = r.in_.as_ref().map(|in_cfg| {
+            storage_map
+                .get(&in_cfg.storage_backend)
+                .cloned()
+                .ok_or_else(|| anyhow!("Unknown IN storage backend: {}", in_cfg.storage_backend))
+        }).transpose()?;
+
+        let out_backend = storage_map
+            .get(&r.out.storage_backend)
+            .cloned()
+            .ok_or_else(|| anyhow!("Unknown OUT storage backend: {}", r.out.storage_backend))?;
+
+        // Match repository type
+        let repo: Arc<dyn Repository> = match r.ty {
+            RepositoryType::Rust => Arc::new(RustRepo {
+                name: r.name.clone(),
+                accept_unpublished: r.accept_unpublished,
+                in_backend,
+                out_backend,
+            }),
+
+            _ => return Err(anyhow!("Unsupported repository type: {:?}", r.ty)),
         };
 
-        let repositories: HashMap<String, RepositoryInstance> = config
-            .repositories
-            .iter()
-            .map(|cfg| {
-                let instance = RepositoryInstance::from_config(cfg, &resolve);
-                (cfg.name.clone(), instance)
-            })
-            .collect();
-
-        RepositoryRegistry {
-            repositories,
-            storage_backends,
-        }
+        repo_instances.push(repo);
     }
 
-    pub fn get_repo(&self, name: &str) -> Option<&RepositoryInstance> {
-        self.repositories.get(name)
-    }
-
-    pub fn list(&self) -> Vec<String> {
-        self.repositories.keys().cloned().collect()
-    }
+    Ok(repo_instances)
 }

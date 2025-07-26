@@ -1,2 +1,5 @@
+
+
 [workspace]
 members = ["holger-core"]
+resolver = "2"

@@ -1,38 +1,36 @@
-use serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
+use anyhow::{Context, Result};
+use serde::Deserialize;
+use std::fs;
+use std::path::Path;
+use toml::from_str;
+use crate::types::HolgerConfig;
 
-use crate::types::{RepositoryType, StorageBackendType};
+pub fn load_config_from_path(path: &Path) -> Result<HolgerConfig> {
+    let content = fs::read_to_string(path)
+        .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct HolgerConfig {
-    pub exposed_endpoints: Vec<EndpointConfig>,
-    pub storage_endpoints: Vec<StorageBackendConfig>,
-    pub repositories: Vec<RepositoryConfig>,
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        match ext {
+            "json" => parse_json_config(&content),
+            "toml" => parse_toml_config(&content),
+            other => Err(anyhow::anyhow!("Unsupported config extension: {}", other)),
+        }
+    } else {
+        Err(anyhow::anyhow!(
+            "No extension found for config file: {}",
+            path.display()
+        ))
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct EndpointConfig {
-    pub name: String,
-    pub url_prefix: String,
+fn parse_json_config(content: &str) -> Result<HolgerConfig> {
+    let cfg = serde_json::from_str::<HolgerConfig>(content)
+        .context("Failed to parse JSON Holger config")?;
+    Ok(cfg)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct StorageBackendConfig {
-    pub name: String,
-    pub r#type: StorageBackendType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct RepositoryConfig {
-    pub name: String,
-    pub r#type: RepositoryType,
-    pub in_: Option<RepositoryIO>,
-    pub out: RepositoryIO,
-    pub upstreams: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct RepositoryIO {
-    pub storage_backend: String,
-    pub endpoints: Vec<String>,
+fn parse_toml_config(content: &str) -> Result<HolgerConfig> {
+    let cfg = from_str::<HolgerConfig>(content)
+        .context("Failed to parse TOML Holger config")?;
+    Ok(cfg)
 }

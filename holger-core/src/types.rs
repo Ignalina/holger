@@ -1,70 +1,83 @@
 use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+pub struct ArtifactId {
+    pub namespace: Option<String>,
+    pub name: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum ArtifactFormat {
-    Java,
-    Python,
+    Maven3,
+    Pip,
     Rust,
     Raw,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum StorageType {
+    Znippy,
+    Rocksdb,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum StorageLocation {
+    Local,
+    S3,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "type")]
+pub struct StorageConfig {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub ty: StorageType,
+    pub location: StorageLocation,
+    pub path: String,
+    pub supports_random_read: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
 pub enum RepositoryType {
-    #[serde(rename = "java")]
-    Java(JavaRepoConfig),
-    #[serde(rename = "python")]
-    Python(PythonRepoConfig),
-    #[serde(rename = "rust")]
-    Rust(RustRepoConfig),
-    #[serde(rename = "raw")]
-    Raw(RawRepoConfig),
+    Rust,
+    Pip,
+    Maven3,
+    Raw,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
-pub struct JavaRepoConfig {
-    pub allow_snapshots: bool,
-    pub group_prefix: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
-pub struct PythonRepoConfig {
-    pub allow_prerelease: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
-pub struct RustRepoConfig {
-    pub accept_unpublished: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
-pub struct RawRepoConfig {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "type")]
-pub enum StorageBackendType {
-    #[serde(rename = "znippy")]
-    Znippy {
-        path: String,
-        #[serde(default = "default_true")]
-        supports_random_read: bool,
-    },
-    #[serde(rename = "rocksdb")]
-    RocksDb {
-        path: String,
-        #[serde(default = "default_false")]
-        supports_random_read: bool,
-    },
-    #[serde(rename = "s3")]
-    S3 {
-        bucket: String,
-        prefix: Option<String>,
-        #[serde(default = "default_true")]
-        supports_random_read: bool,
-    },
+pub struct Endpoint {
+    pub name: String,
+    pub url_prefix: String,
 }
 
-fn default_true() -> bool { true }
-fn default_false() -> bool { false }
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct InOutConfig {
+    pub storage_backend: String,
+    pub endpoints: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RepositoryConfig {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub ty: RepositoryType,
+    pub accept_unpublished: bool,
+    #[serde(default)]
+    pub in_: Option<InOutConfig>,
+    pub out: InOutConfig,
+    #[serde(default)]
+    pub upstreams: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct HolgerConfig {
+    pub exposed_endpoints: Vec<Endpoint>,
+    pub storage_endpoints: Vec<StorageConfig>,
+    pub repositories: Vec<RepositoryConfig>,
+}
