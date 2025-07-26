@@ -141,3 +141,96 @@ DepGraph --> Promote
 CFG --> Repositories
 
 ```
+
+```json
+{
+  "exposed_endpoints": [
+    {
+      "name": "main",
+      "url_prefix": "https://holger.example.com/"
+    }
+  ],
+  "storage_endpoints": [
+    {
+      "name": "znippy-local",
+      "type": {
+        "znippy": {
+          "path": "/var/lib/holger/znippy/",
+          "supports_random_read": true
+        }
+      }
+    }
+  ],
+  "repositories": [
+    {
+      "name": "rust-prod",
+      "type": {
+        "rust": {
+          "accept_unpublished": false
+        }
+      },
+      "out": {
+        "storage_backend": "znippy-local",
+        "endpoints": ["main"]
+      }
+    }
+  ]
+}
+
+```
+
+
+```json
+
+{
+  "exposed_endpoints": [
+    {
+      "name": "main",
+      "url_prefix": "https://holger.example.com/"
+    },
+    {
+      "name": "internal",
+      "url_prefix": "http://localhost:8080/"
+    }
+  ],
+  "storage_endpoints": [
+    {
+      "name": "znippy-local",
+      "type": {
+        "znippy": {
+          "path": "/var/lib/holger/znippy/",
+          "supports_random_read": true
+        }
+      }
+    },
+    {
+      "name": "rocks-dev",
+      "type": {
+        "rocksdb": {
+          "path": "/var/lib/holger/rocksdb/",
+          "supports_random_read": false
+        }
+      }
+    }
+  ],
+  "repositories": [
+    {
+      "name": "rust-dev",
+      "type": {
+        "rust": {
+          "accept_unpublished": true
+        }
+      },
+      "in": {
+        "storage_backend": "rocks-dev",
+        "endpoints": ["internal"]
+      },
+      "out": {
+        "storage_backend": "znippy-local",
+        "endpoints": ["main"]
+      },
+      "upstreams": []
+    }
+  ]
+}
+```
