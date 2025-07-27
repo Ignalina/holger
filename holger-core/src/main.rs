@@ -65,7 +65,7 @@ async fn handle_request(_req: Request<hyper::body::Incoming>) -> Result<Response
 fn load_tls_config(cert_path: &str, key_path: &str) -> Result<ServerConfig> {
     println!("{}", std::env::current_dir()?.display());
     let certs = load_certs(cert_path)?;
-    let key = load_key(key_path)?;
+    let key = load_key(Path::new(key_path))?;
 
     let mut config = ServerConfig::builder()
         .with_no_client_auth()
@@ -91,28 +91,30 @@ fn load_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
 use rustls_pemfile::{Item, read_all};
 use tokio_rustls::rustls::pki_types::{PrivatePkcs8KeyDer, PrivateSec1KeyDer};
 
-fn load_key<P: AsRef<Path>>(path: P) -> Result<PrivateKeyDer<'static>> {
-    let file = File::open(&path).context("unable to open key.pem")?;
+fn load_key(path: &Path) -> Result<PrivateKeyDer<'static>> {
+    let file = File::open(path)?;
+
     let mut reader = BufReader::new(file);
-    let items = read_all(&mut reader).context("unable to parse PEM in key.pem")?;
+    let items = read_all(&mut reader)?;
 
     for item in items {
         match item {
-            Item::RSAKey(key) => {
-                let pkcs1 = PrivatePkcs1KeyDer::from(key);
-                return Ok(PrivateKeyDer::from(pkcs1));
+            Item::PKCS8Key(bytes) => {
+                println!("Found PKCS8 key");
+                return Ok(PrivateKeyDer::from(PrivatePkcs8KeyDer::from(bytes)));
             }
-            Item::PKCS8Key(key) => {
-                let pkcs8 = PrivatePkcs8KeyDer::from(key);
-                return Ok(PrivateKeyDer::from(pkcs8));
+            Item::RSAKey(bytes) => {
+                println!("Found RSA key");
+                return Ok(PrivateKeyDer::from(PrivatePkcs1KeyDer::from(bytes)));
             }
-            Item::ECKey(key) => {
-                let sec1 = PrivateSec1KeyDer::from(key);
-                return Ok(PrivateKeyDer::from(sec1));
+            Item::ECKey(bytes) => {
+                println!("Found EC key");
+                return Ok(PrivateKeyDer::from(PrivateSec1KeyDer::from(bytes)));
             }
-            _ => continue, // Skip unknown
+            _ => println!("Skipping non-key item"),
         }
     }
 
-    Err(anyhow::anyhow!("no private key found in {:?}", path.as_ref()))
+    Err(anyhow::anyhow!("no private key found"))
 }
+
