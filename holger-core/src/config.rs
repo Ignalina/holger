@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
+use schemars::_private::serde_json;
 use toml::from_str;
 use crate::types::HolgerConfig;
 

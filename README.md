@@ -2,7 +2,7 @@
 
 **Holger guards your artifacts at rest.**
 
-Immutable Rust-based artifact airgaper. Holger ingests language-specific package trees and serves them over standardized APIs, just like Artifactory or Nexus — but with an airgapped, append-only backend called **Artisan**, based on Znippy archives.
+Immutable Rust-based artifact airgaper. Holger ingests language-specific package trees and serves them over standardized APIs, just like Artifactory or Nexus — but with an airgapped, append-only backend called **artifact**, based on Znippy archives.
 
 ## Overview
 
@@ -18,20 +18,20 @@ When airgapping environments, your company saves offline packages using native l
 
 These folders are archived into a `.znippy` file by the Znippy CLI. The resulting `.znippy` file is immutable and can be verified using Blake3 checksums.
 
-The Holger service reads this `.znippy` archive and exposes one virtual API endpoint per language. Internally, the `.znippy` file is parsed into one Arrow-based table per language, collectively called an `.artisan` file. Holger uses this file to respond to requests from tools like Cargo, pip, Maven and Go.
+The Holger service reads this `.znippy` archive and exposes one virtual API endpoint per language. Internally, the `.znippy` file is parsed into one Arrow-based table per language, collectively called an `.artifact` file. Holger uses this file to respond to requests from tools like Cargo, pip, Maven and Go.
 
 ## Holger Serving Modes
 
-All `.artisan` files are immutable. However, Holger can optionally be configured to allow **live ingest** of artifacts not found in the current `.artisan`. This is primarily useful in DEV environments.
+All `.artifact` files are immutable. However, Holger can optionally be configured to allow **live ingest** of artifacts not found in the current `.artifact`. This is primarily useful in DEV environments.
 
 | History | Source                   | Update Capability         | Use Case                           |
 | ---- | ------------------------ | ------------------------- | ---------------------------------- |
-| V1   | Initial .artisan import  | Immutable                 | Bootstrap, base snapshot           |
-| V2   | .artisan + live ingest   | Yes (in-memory + RocksDB) | DEV: allow dynamic additions       |
-| V3   | Promoted `.artisan` only | Immutable                 | PROD: strict airgapped enforcement |
+| V1   | Initial .artifact import  | Immutable                 | Bootstrap, base snapshot           |
+| V2   | .artifact + live ingest   | Yes (in-memory + RocksDB) | DEV: allow dynamic additions       |
+| V3   | Promoted `.artifact` only | Immutable                 | PROD: strict airgapped enforcement |
 
 - V2 allows development-time fetches from upstream sources (e.g. crates.io, PyPI) and caches them.
-- V3 is the result of promoting selected artifacts from V2 into a new `.artisan` file.
+- V3 is the result of promoting selected artifacts from V2 into a new `.artifact` file.
 - Live proxy mode can be disabled completely in strict environments.
 
 ## Architecture
@@ -56,9 +56,9 @@ GO --> ZNIPPY
 subgraph Holger_Processing
     INPUTAPI["Holger INPUT api/"] --> HOLGER["🛡 Holger Ingest & Promote Service"]
     ZNIPPY --> HOLGER
-    HOLGER --> ARTISAN_V1["📚 .artisan v1"]
-    HOLGER --> ARTISAN_V2["📚 .artisan v2"]
-    HOLGER --> ARTISAN_V3["📚 .artisan v3"]
+    HOLGER --> artifact_V1["📚 .artifact v1"]
+    HOLGER --> artifact_V2["📚 .artifact v2"]
+    HOLGER --> artifact_V3["📚 .artifact v3"]
 end
 
 %% Step 3: Holger Serving via APIs
@@ -76,22 +76,22 @@ subgraph HolgerPROD _API_Endpoints
     GOPROXY_prod["Golang Proxy Mode"]
 end
 
-ARTISAN_V2 --> CARGO_dev
-ARTISAN_V2 --> PIP_dev
-ARTISAN_V2 --> MAVEN_dev
-ARTISAN_V2 --> GOPROXY_dev
+artifact_V2 --> CARGO_dev
+artifact_V2 --> PIP_dev
+artifact_V2 --> MAVEN_dev
+artifact_V2 --> GOPROXY_dev
 
-ARTISAN_V3 --> CARGO_prod
-ARTISAN_V3 --> PIP_prod
-ARTISAN_V3 --> MAVEN_prod
-ARTISAN_V3 --> GOPROXY_prod
+artifact_V3 --> CARGO_prod
+artifact_V3 --> PIP_prod
+artifact_V3 --> MAVEN_prod
+artifact_V3 --> GOPROXY_prod
 ```
 
 ## Status
 
 - ✅ Znippy archive ingestion
 - ✅ Arrow-based indexing
-- ✅ Immutable .artisan output
+- ✅ Immutable .artifact output
 - ⛖ API servers in progress
 - 🚽 Blake3 verification in place
 - 
@@ -108,8 +108,8 @@ end
 
 %% Repos
 subgraph Repositories
-    Hosted1[Hosted Repo\nname: java-test\nmode: .artisan + live\nformat: Java]
-    Hosted2[Hosted Repo\nname: rust-prod\nmode: .artisan only\nformat: Rust]
+    Hosted1[Hosted Repo\nname: java-test\nmode: .artifact + live\nformat: Java]
+    Hosted2[Hosted Repo\nname: rust-prod\nmode: .artifact only\nformat: Rust]
     Proxy1[Proxy Repo\nname: maven-central\nURL: mirror]
     Agg1[Aggregated Repo\nname: all-java\nincludes: java-test and maven-central]
 end
