@@ -1,6 +1,7 @@
 use http_body_util::{Full, combinators::BoxBody};
 use bytes::Bytes;
 use std::convert::Infallible;
+use std::io::Read;
 
 use http_body_util::BodyExt;
 use std::{
@@ -62,6 +63,7 @@ async fn handle_request(_req: Request<hyper::body::Incoming>) -> Result<Response
     Ok(Response::new(body))
 }
 fn load_tls_config(cert_path: &str, key_path: &str) -> Result<ServerConfig> {
+    println!("{}", std::env::current_dir()?.display());
     let certs = load_certs(cert_path)?;
     let key = load_key(key_path)?;
 
@@ -85,9 +87,32 @@ fn load_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
     Ok(certs)
 }
 
-fn load_key(path: &str) -> Result<PrivateKeyDer<'static>> {
-    let mut file = BufReader::new(File::open(path)?);
-    let keys = rsa_private_keys(&mut file).context("failed to read private key")?;
-    let key = keys.into_iter().next().context("no private key found")?;
-    Ok(PrivateKeyDer::from(PrivatePkcs1KeyDer::from(key)))
+
+use rustls_pemfile::{Item, read_all};
+use tokio_rustls::rustls::pki_types::{PrivatePkcs8KeyDer, PrivateSec1KeyDer};
+
+fn load_key<P: AsRef<Path>>(path: P) -> Result<PrivateKeyDer<'static>> {
+    let file = File::open(&path).context("unable to open key.pem")?;
+    let mut reader = BufReader::new(file);
+    let items = read_all(&mut reader).context("unable to parse PEM in key.pem")?;
+
+    for item in items {
+        match item {
+            Item::RSAKey(key) => {
+                let pkcs1 = PrivatePkcs1KeyDer::from(key);
+                return Ok(PrivateKeyDer::from(pkcs1));
+            }
+            Item::PKCS8Key(key) => {
+                let pkcs8 = PrivatePkcs8KeyDer::from(key);
+                return Ok(PrivateKeyDer::from(pkcs8));
+            }
+            Item::ECKey(key) => {
+                let sec1 = PrivateSec1KeyDer::from(key);
+                return Ok(PrivateKeyDer::from(sec1));
+            }
+            _ => continue, // Skip unknown
+        }
+    }
+
+    Err(anyhow::anyhow!("no private key found in {:?}", path.as_ref()))
 }
