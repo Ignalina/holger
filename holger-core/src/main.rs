@@ -58,10 +58,57 @@ async fn main() -> Result<()> {
 
 
 
-async fn handle_request(_req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>, hyper::Error> {
+async fn handle_requestOLD(_req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>, hyper::Error> {
     let body = Full::new(Bytes::from_static(b"Hello over HTTPS+HTTP2")).boxed();
     Ok(Response::new(body))
 }
+async fn handle_request(req: Request<Body>) -> Result<Response<BoxBody<Bytes, Infallible>>, hyper::Error> {
+    let path = req.uri().path();
+    let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+
+    match parts.as_slice() {
+        ["crates", crate_name, version, "download"] => {
+            println!("Download request: crate={} version={}", crate_name, version);
+            let body = Full::new(Bytes::from_static(b"OK")).boxed();
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/octet-stream")
+                .body(body)
+                .unwrap());
+        }
+
+        ["config.json"] => {
+            println!("config.json requested");
+            let json = r#"{"dl":"https://127.0.0.1:8443/crates"}"#;
+            let body = Full::new(Bytes::from_static(json.as_bytes())).boxed();
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(body)
+                .unwrap());
+        }
+
+        ["index", crate_name] => {
+            println!("Index request: crate={}", crate_name);
+            let body = Full::new(Bytes::from_static(b"dummy-index-content")).boxed();
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "text/plain")
+                .body(body)
+                .unwrap());
+        }
+
+        _ => {
+            println!("Unhandled path: {}", path);
+            let body = Full::new(Bytes::from_static(b"Not found")).boxed();
+            return Ok(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(body)
+                .unwrap());
+        }
+    }
+}
+
 fn load_tls_config(cert_path: &str, key_path: &str) -> Result<ServerConfig> {
     println!("{}", std::env::current_dir()?.display());
     let certs = load_certs(cert_path)?;
