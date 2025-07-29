@@ -1,5 +1,5 @@
 use crate::config::load_config_from_path;
-use crate::repo::{Repository, RustRepo};
+use crate::repo::{RepositoryBackend, RustRepo};
 use crate::storage::{ResolvedStorage};
 use crate::types::{HolgerConfig, RepositoryType};
 
@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 /// Load and instantiate all repositories from a given config file
-pub fn load_registry(path: &Path) -> Result<Vec<Arc<dyn Repository>>> {
+pub fn load_registry(path: &Path) -> Result<Vec<Arc<dyn RepositoryBackend>>> {
     let config: HolgerConfig = load_config_from_path(path)?;
 
     // Step 1: Build map of storage backends
@@ -20,7 +20,7 @@ pub fn load_registry(path: &Path) -> Result<Vec<Arc<dyn Repository>>> {
     }
 
     // Step 2: Instantiate all repositories
-    let mut repo_instances: Vec<Arc<dyn Repository>> = Vec::new();
+    let mut repo_instances: Vec<Arc<dyn RepositoryBackend>> = Vec::new();
 
     for r in &config.repositories {
         let in_backend = r.in_.as_ref().map(|in_cfg| {
@@ -36,7 +36,7 @@ pub fn load_registry(path: &Path) -> Result<Vec<Arc<dyn Repository>>> {
             .ok_or_else(|| anyhow!("Unknown OUT storage backend: {}", r.out.storage_backend))?;
 
         // Match repository type
-        let repo: Arc<dyn Repository> = match r.ty {
+        let repo: Arc<dyn RepositoryBackend> = match r.ty {
             RepositoryType::Rust => Arc::new(RustRepo {
                 name: r.name.clone(),
                 accept_unpublished: r.accept_unpublished,

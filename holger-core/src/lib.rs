@@ -6,6 +6,6 @@ pub mod registry;
 
 pub use config::load_config_from_path;
 pub use registry::load_registry;
-pub use repo::{Repository, RepositoryInstance};
+pub use repo::{RepositoryBackend, RepositoryInstance};
 pub use types::*;
 pub use storage::ResolvedStorage;

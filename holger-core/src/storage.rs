@@ -1,4 +1,4 @@
-use crate::types::{StorageConfig, StorageLocation, StorageType};
+use crate::types::{StorageEndpoint, StorageLocation, StorageType};
 use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 
@@ -11,7 +11,7 @@ pub enum ResolvedStorage {
 }
 
 impl ResolvedStorage {
-    pub fn from_config(config: &StorageConfig) -> Result<Self> {
+    pub fn from_config(config: &StorageEndpoint) -> Result<Self> {
         match config.ty {
             StorageType::Znippy => match config.location {
                 StorageLocation::Local => Ok(ResolvedStorage::ZnippyLocal {

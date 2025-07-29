@@ -27,7 +27,8 @@ use tokio_rustls::rustls::{ServerConfig, pki_types::{CertificateDer, PrivateKeyD
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let tls_cfg = load_tls_config("cert.pem", "key.pem")?;
+
+    let tls_cfg = load_tls_config("tests/certs/cert.pem", "tests/certs/key.pem")?;
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_cfg));
 
     let listener = TcpListener::bind("127.0.0.1:8443").await?;

@@ -1,4 +1,4 @@
-use crate::types::{ArtifactFormat, ArtifactId, RepositoryConfig, RepositoryType};
+use crate::types::{ArtifactFormat, ArtifactId, Repository, RepositoryType};
 use crate::storage::ResolvedStorage;
 use anyhow::{anyhow, Result};
 use std::any::Any;
@@ -16,7 +16,7 @@ pub struct RepositoryInstance {
 }
 
 impl RepositoryInstance {
-    pub fn from_config<F>(cfg: &RepositoryConfig, resolve_storage: &F) -> Result<Self>
+    pub fn from_config<F>(cfg: &Repository, resolve_storage: &F) -> Result<Self>
     where
         F: Fn(&str) -> ResolvedStorage,
     {
@@ -47,7 +47,7 @@ impl RepositoryInstance {
 }
 
 /// Core trait for all repository types
-pub trait Repository: Send + Sync {
+pub trait RepositoryBackend: Send + Sync {
     fn name(&self) -> &str;
     fn format(&self) -> ArtifactFormat;
     fn is_writable(&self) -> bool;
@@ -59,7 +59,7 @@ pub trait Repository: Send + Sync {
 
     fn fetch_many_with_upstreams(
         &self,
-        upstreams: &[Arc<dyn Repository>],
+        upstreams: &[Arc<dyn RepositoryBackend>],
         ids: &[ArtifactId],
     ) -> Result<HashMap<ArtifactId, Vec<u8>>> {
         let mut result = HashMap::new();
@@ -90,7 +90,7 @@ pub struct RustRepo {
     pub out_backend: ResolvedStorage,
 }
 
-impl Repository for RustRepo {
+impl RepositoryBackend for RustRepo {
     fn name(&self) -> &str {
         &self.name
     }

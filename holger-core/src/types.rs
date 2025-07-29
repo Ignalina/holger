@@ -1,4 +1,6 @@
+use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+
 use schemars::JsonSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
@@ -32,7 +34,7 @@ pub enum StorageLocation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct StorageConfig {
+pub struct StorageEndpoint {
     pub name: String,
     #[serde(rename = "type")]
     pub ty: StorageType,
@@ -51,33 +53,61 @@ pub enum RepositoryType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct Endpoint {
+pub struct ExposedEndpoint {
     pub name: String,
     pub url_prefix: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct InOutConfig {
+pub struct InOut {
     pub storage_backend: String,
     pub endpoints: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct RepositoryConfig {
+pub struct Repository {
     pub name: String,
     #[serde(rename = "type")]
     pub ty: RepositoryType,
     pub accept_unpublished: bool,
     #[serde(default)]
-    pub in_: Option<InOutConfig>,
-    pub out: InOutConfig,
+    pub in_: Option<InOut>,
+    pub out: InOut,
     #[serde(default)]
     pub upstreams: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HolgerConfig {
-    pub exposed_endpoints: Vec<Endpoint>,
-    pub storage_endpoints: Vec<StorageConfig>,
-    pub repositories: Vec<RepositoryConfig>,
+    pub exposed_endpoints: Vec<ExposedEndpoint>,
+    pub storage_endpoints: Vec<StorageEndpoint>,
+    pub repositories: Vec<Repository>,
+}
+pub struct RtRepository {
+    pub config: Arc<Repository>, // pekar till konfigen
+    pub in_: Option<RtInOut>,
+    pub out: RtInOut,
+
+    pub is_initialized: bool,
+}
+
+
+
+
+pub struct RtStorageEndpoint {
+    pub config: Arc<StorageEndpoint>,
+    // t.ex. resolved path eller fs-hanterare
+}
+
+pub struct RtExposedEndpoint {
+
+    pub config: Arc<ExposedEndpoint>,
+    // t.ex. listener-socket, TLS-server, m.m.
+}
+
+#[allow(non_snake_case)]
+pub struct RtInOut {
+    pub config: Arc<InOut>,
+    pub storage: Arc<RtStorageEndpoint>,
+    pub endpoints: Vec<Arc<RtExposedEndpoint>>,
 }
