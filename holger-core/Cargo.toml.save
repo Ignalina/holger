@@ -1,0 +1,24 @@
+[package]
+name = "holger-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+futures-util = { version = "0.3", default-features = false }
+hyper = { version = "1.6", features = ["full"] }
+tokio = { version = "1.47", features = ["full"] }
+
+serde = { version = "1.0.219", features = ["derive"] }
+toml = "0.9.2"
+schemars = "1.0.4"
+bytes = "1.10.1"
+anyhow = "1.0.98"
+
+
+
+hyper-util = { version = "0.1", features = ["tokio"] }
+tokio-rustls = "0.25"
+rustls = { version = "0.23", features = ["std"] }
+rustls-pemfile = "1"
+http-body-util = "0.1.3"

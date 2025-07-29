@@ -53,7 +53,7 @@ pub enum RepositoryType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct Endpointinstance {
+pub struct ExposedEndpoint {
     pub name: String,
     pub url_prefix: String,
 }
@@ -79,7 +79,7 @@ pub struct Repository {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HolgerConfig {
-    pub exposed_endpoints: Vec<Endpointinstance>,
+    pub exposed_endpoints: Vec<ExposedEndpoint>,
     pub storage_endpoints: Vec<StorageEndpoint>,
     pub repositories: Vec<Repository>,
 }
