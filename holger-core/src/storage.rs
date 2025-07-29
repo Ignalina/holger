@@ -4,27 +4,27 @@ use std::path::PathBuf;
 
 /// Represents a fully resolved storage backend.
 #[derive(Debug, Clone)]
-pub enum ResolvedStorage {
+pub enum StorageEndpointInstance{
     ZnippyLocal { path: PathBuf },
     ZnippyS3 { bucket: String, prefix: String },
     RocksdbLocal { path: PathBuf },
 }
 
-impl ResolvedStorage {
+impl StorageEndpointInstance {
     pub fn from_config(config: &StorageEndpoint) -> Result<Self> {
         match config.ty {
             StorageType::Znippy => match config.location {
-                StorageLocation::Local => Ok(ResolvedStorage::ZnippyLocal {
+                StorageLocation::Local => Ok(StorageEndpointInstance::ZnippyLocal {
                     path: PathBuf::from(&config.path),
                 }),
-                StorageLocation::S3 => Ok(ResolvedStorage::ZnippyS3 {
+                StorageLocation::S3 => Ok(StorageEndpointInstance::ZnippyS3 {
                     bucket: extract_s3_bucket(&config.path)?,
                     prefix: extract_s3_prefix(&config.path)?,
                 }),
             },
 
             StorageType::Rocksdb => match config.location {
-                StorageLocation::Local => Ok(ResolvedStorage::RocksdbLocal {
+                StorageLocation::Local => Ok(StorageEndpointInstance::RocksdbLocal {
                     path: PathBuf::from(&config.path),
                 }),
                 StorageLocation::S3 => Err(anyhow!(

@@ -1,6 +1,6 @@
 use crate::config::load_config_from_path;
 use crate::repo::{RepositoryBackend, RustRepo};
-use crate::storage::{ResolvedStorage};
+use crate::storage::{StorageEndpointInstance};
 use crate::types::{HolgerConfig, RepositoryType};
 
 use anyhow::{anyhow, Result};
@@ -13,9 +13,9 @@ pub fn load_registry(path: &Path) -> Result<Vec<Arc<dyn RepositoryBackend>>> {
     let config: HolgerConfig = load_config_from_path(path)?;
 
     // Step 1: Build map of storage backends
-    let mut storage_map = HashMap::<String, ResolvedStorage>::new();
+    let mut storage_map = HashMap::<String, StorageEndpointInstance>::new();
     for s in &config.storage_endpoints {
-        let resolved = ResolvedStorage::from_config(s)?;
+        let resolved = StorageEndpointInstance::from_config(s)?;
         storage_map.insert(s.name.clone(), resolved);
     }
 

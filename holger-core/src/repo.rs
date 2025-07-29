@@ -1,5 +1,5 @@
 use crate::types::{ArtifactFormat, ArtifactId, Repository, RepositoryType};
-use crate::storage::ResolvedStorage;
+use crate::storage::StorageEndpointInstance;
 use anyhow::{anyhow, Result};
 use std::any::Any;
 use std::collections::HashMap;
@@ -10,15 +10,15 @@ pub struct RepositoryInstance {
     pub name: String,
     pub format: ArtifactFormat,
     pub repo_type: RepositoryType,
-    pub in_backend: Option<ResolvedStorage>,
-    pub out_backend: ResolvedStorage,
+    pub in_backend: Option<StorageEndpointInstance>,
+    pub out_backend: StorageEndpointInstance,
     pub upstreams: Vec<String>,
 }
 
 impl RepositoryInstance {
     pub fn from_config<F>(cfg: &Repository, resolve_storage: &F) -> Result<Self>
     where
-        F: Fn(&str) -> ResolvedStorage,
+        F: Fn(&str) -> StorageEndpointInstance,
     {
         let format = match cfg.ty {
             RepositoryType::Maven3 => ArtifactFormat::Maven3,
@@ -86,8 +86,8 @@ pub trait RepositoryBackend: Send + Sync {
 pub struct RustRepo {
     pub name: String,
     pub accept_unpublished: bool,
-    pub in_backend: Option<ResolvedStorage>,
-    pub out_backend: ResolvedStorage,
+    pub in_backend: Option<StorageEndpointInstance>,
+    pub out_backend: StorageEndpointInstance,
 }
 
 impl RepositoryBackend for RustRepo {

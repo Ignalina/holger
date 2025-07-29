@@ -53,7 +53,7 @@ pub enum RepositoryType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct ExposedEndpoint {
+pub struct Endpointinstance {
     pub name: String,
     pub url_prefix: String,
 }
@@ -79,35 +79,11 @@ pub struct Repository {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HolgerConfig {
-    pub exposed_endpoints: Vec<ExposedEndpoint>,
+    pub exposed_endpoints: Vec<Endpointinstance>,
     pub storage_endpoints: Vec<StorageEndpoint>,
     pub repositories: Vec<Repository>,
 }
-pub struct RtRepository {
-    pub config: Arc<Repository>, // pekar till konfigen
-    pub in_: Option<RtInOut>,
-    pub out: RtInOut,
-
-    pub is_initialized: bool,
-}
 
 
 
 
-pub struct RtStorageEndpoint {
-    pub config: Arc<StorageEndpoint>,
-    // t.ex. resolved path eller fs-hanterare
-}
-
-pub struct RtExposedEndpoint {
-
-    pub config: Arc<ExposedEndpoint>,
-    // t.ex. listener-socket, TLS-server, m.m.
-}
-
-#[allow(non_snake_case)]
-pub struct RtInOut {
-    pub config: Arc<InOut>,
-    pub storage: Arc<RtStorageEndpoint>,
-    pub endpoints: Vec<Arc<RtExposedEndpoint>>,
-}
