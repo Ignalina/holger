@@ -1,5 +1,6 @@
 use crate::config::load_config_from_path;
-use crate::repo::{RepositoryBackend, RustRepo};
+use crate::repository::types::RepositoryBackend;
+use crate::repository::rust::RustRepo;
 use crate::storage::{StorageEndpointInstance};
 use crate::types::{HolgerConfig, RepositoryType};
 
@@ -9,7 +10,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 /// Load and instantiate all repositories from a given config file
-pub fn load_registry(path: &Path) -> Result<Vec<Arc<dyn RepositoryBackend>>> {
+pub fn load_repository(path: &Path) -> Result<Vec<Arc<dyn RepositoryBackend>>> {
     let config: HolgerConfig = load_config_from_path(path)?;
 
     // Step 1: Build map of storage backends

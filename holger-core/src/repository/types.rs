@@ -1,19 +1,7 @@
-use crate::types::{ArtifactFormat, ArtifactId, Repository, RepositoryType};
-use crate::storage::StorageEndpointInstance;
-use anyhow::{anyhow, Result};
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-#[derive(Debug)]
-pub struct ExposedEndpointInstance;
-
-#[derive(Debug)]
-pub struct HolgerInstance {
-    pub exposed_endpoints: Vec<Arc<ExposedEndpointInstance>>,
-    pub storage_endpoints: Vec<Arc<StorageEndpointInstance>>,
-    pub repositories: Vec<Arc<RepositoryInstance>>,
-}
+use crate::{ArtifactFormat, ArtifactId, Repository, RepositoryType, StorageEndpointInstance};
 
 #[derive(Debug)]
 pub struct RepositoryInstance {
@@ -26,7 +14,7 @@ pub struct RepositoryInstance {
 }
 
 impl RepositoryInstance {
-    pub fn from_config<F>(cfg: &Repository, resolve_storage: &F) -> Result<Self>
+    pub fn from_config<F>(cfg: &Repository, resolve_storage: &F) -> anyhow::Result<Self>
     where
         F: Fn(&str) -> StorageEndpointInstance,
     {
@@ -61,8 +49,8 @@ pub trait RepositoryBackend: Send + Sync {
     fn format(&self) -> ArtifactFormat;
     fn is_writable(&self) -> bool;
 
-    fn fetch(&self, id: &ArtifactId) -> Result<Option<Vec<u8>>>;
-    fn put(&self, id: &ArtifactId, data: &[u8]) -> Result<()>;
+    fn fetch(&self, id: &ArtifactId) -> anyhow::Result<Option<Vec<u8>>>;
+    fn put(&self, id: &ArtifactId, data: &[u8]) -> anyhow::Result<()>;
 
     fn as_any(&self) -> &dyn Any;
 
@@ -70,7 +58,7 @@ pub trait RepositoryBackend: Send + Sync {
         &self,
         upstreams: &[Arc<dyn RepositoryBackend>],
         ids: &[ArtifactId],
-    ) -> Result<HashMap<ArtifactId, Vec<u8>>> {
+    ) -> anyhow::Result<HashMap<ArtifactId, Vec<u8>>> {
         let mut result = HashMap::new();
 
         for id in ids {
@@ -89,38 +77,3 @@ pub trait RepositoryBackend: Send + Sync {
     }
 }
 
-/// Minimal RustRepo example
-pub struct RustRepo {
-    pub name: String,
-    pub in_backend: Option<StorageEndpointInstance>,
-    pub out_backend: StorageEndpointInstance,
-}
-
-impl RepositoryBackend for RustRepo {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn format(&self) -> ArtifactFormat {
-        ArtifactFormat::Rust
-    }
-
-    fn is_writable(&self) -> bool {
-        self.in_backend.is_some()
-    }
-
-    fn fetch(&self, _id: &ArtifactId) -> Result<Option<Vec<u8>>> {
-        Ok(None)
-    }
-
-    fn put(&self, _id: &ArtifactId, _data: &[u8]) -> Result<()> {
-        if self.in_backend.is_none() {
-            return Err(anyhow!("Repository '{}' is read-only", self.name));
-        }
-        Ok(())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
