@@ -9,27 +9,21 @@ url_prefix = "http://10.1.2.20/"
 [[storage_endpoints]]
 name = "artifact-prod"
 type = "znippy"
-location = "local"
 path = "/var/lib/holger/rust-prod/"
-supports_random_read = true
 
 [[storage_endpoints]]
 name = "rocksdb-dev"
 type = "rocksdb"
-location = "local"
 path = "/var/lib/holger/rust-dev/"
-supports_random_read = false
 
 [[repositories]]
 name = "rust-prod"
 type = "rust"
-accept_unpublished = false
-out = { storage_backend = "artifact-prod", endpoints = ["prod"] }
+out = { storage_backend = "artifact-prod", exposed_endpoint = "prod" }
 
 [[repositories]]
 name = "rust-dev"
 type = "rust"
-accept_unpublished = true
-in = { storage_backend = "rocksdb-dev", endpoints = ["dev"] }
-out = { storage_backend = "artifact-prod", endpoints = ["dev"] }
+in = { storage_backend = "rocksdb-dev", exposed_endpoint = "dev" }
+out = { storage_backend = "artifact-prod", exposed_endpoint = "dev" }
 upstreams = ["rust-prod"]

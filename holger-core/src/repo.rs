@@ -6,13 +6,23 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug)]
+pub struct ExposedEndpointInstance;
+
+#[derive(Debug)]
+pub struct HolgerInstance {
+    pub exposed_endpoints: Vec<Arc<ExposedEndpointInstance>>,
+    pub storage_endpoints: Vec<Arc<StorageEndpointInstance>>,
+    pub repositories: Vec<Arc<RepositoryInstance>>,
+}
+
+#[derive(Debug)]
 pub struct RepositoryInstance {
     pub name: String,
     pub format: ArtifactFormat,
     pub repo_type: RepositoryType,
     pub in_backend: Option<StorageEndpointInstance>,
     pub out_backend: StorageEndpointInstance,
-    pub upstreams: Vec<String>,
+    pub upstreams: Vec<String>, // store names first; link phase later
 }
 
 impl RepositoryInstance {
@@ -27,9 +37,8 @@ impl RepositoryInstance {
             RepositoryType::Raw => ArtifactFormat::Raw,
         };
 
-        let in_backend = cfg.in_.as_ref().map(|in_cfg| resolve_storage(&in_cfg.storage_backend));
+        let in_backend = cfg.r#in.as_ref().map(|in_cfg| resolve_storage(&in_cfg.storage_backend));
         let out_backend = resolve_storage(&cfg.out.storage_backend);
-        let upstreams = cfg.upstreams.clone();
 
         Ok(RepositoryInstance {
             name: cfg.name.clone(),
@@ -37,7 +46,7 @@ impl RepositoryInstance {
             repo_type: cfg.ty.clone(),
             in_backend,
             out_backend,
-            upstreams,
+            upstreams: cfg.upstreams.clone(), // keep strings first
         })
     }
 
@@ -69,7 +78,6 @@ pub trait RepositoryBackend: Send + Sync {
                 result.insert(id.clone(), data);
                 continue;
             }
-
             for up in upstreams {
                 if let Some(data) = up.fetch(id)? {
                     result.insert(id.clone(), data);
@@ -77,15 +85,13 @@ pub trait RepositoryBackend: Send + Sync {
                 }
             }
         }
-
         Ok(result)
     }
 }
 
-/// A sample implementation for RustRepo
+/// Minimal RustRepo example
 pub struct RustRepo {
     pub name: String,
-    pub accept_unpublished: bool,
     pub in_backend: Option<StorageEndpointInstance>,
     pub out_backend: StorageEndpointInstance,
 }
@@ -104,16 +110,13 @@ impl RepositoryBackend for RustRepo {
     }
 
     fn fetch(&self, _id: &ArtifactId) -> Result<Option<Vec<u8>>> {
-        // placeholder for now
         Ok(None)
     }
 
     fn put(&self, _id: &ArtifactId, _data: &[u8]) -> Result<()> {
-        if !self.accept_unpublished || self.in_backend.is_none() {
+        if self.in_backend.is_none() {
             return Err(anyhow!("Repository '{}' is read-only", self.name));
         }
-
-        // placeholder for now
         Ok(())
     }
 

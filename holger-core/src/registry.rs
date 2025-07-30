@@ -23,7 +23,7 @@ pub fn load_registry(path: &Path) -> Result<Vec<Arc<dyn RepositoryBackend>>> {
     let mut repo_instances: Vec<Arc<dyn RepositoryBackend>> = Vec::new();
 
     for r in &config.repositories {
-        let in_backend = r.in_.as_ref().map(|in_cfg| {
+        let in_backend = r.r#in.as_ref().map(|in_cfg| {
             storage_map
                 .get(&in_cfg.storage_backend)
                 .cloned()
@@ -39,7 +39,6 @@ pub fn load_registry(path: &Path) -> Result<Vec<Arc<dyn RepositoryBackend>>> {
         let repo: Arc<dyn RepositoryBackend> = match r.ty {
             RepositoryType::Rust => Arc::new(RustRepo {
                 name: r.name.clone(),
-                accept_unpublished: r.accept_unpublished,
                 in_backend,
                 out_backend,
             }),
