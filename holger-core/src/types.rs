@@ -59,7 +59,7 @@ pub struct Repository {
     pub ty: RepositoryType,
     #[serde(default)]
     pub r#in: Option<InOut>,
-    pub out: InOut,
+    pub out: Option<InOut>,
     #[serde(default)]
     pub upstreams: Vec<String>,
 }

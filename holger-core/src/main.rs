@@ -1,21 +1,17 @@
 use std::path::Path;
-use holger_core::registry::load_repository;
+use holger_core::config::factory;
+use holger_core::load_config_from_path;
 
-fn main() {
-    let config_path = Path::new("holger-core/tests/prod.toml");
+fn main() -> anyhow::Result<()> {
+    // 1. Load the config file
+    println!("{}", std::env::current_dir().unwrap().display());
+    let config = load_config_from_path("holger-core/tests/prod.toml")?;
 
-    match load_repository(config_path) {
-        Ok(repos) => {
-            println!("✅ Registry laddad.");
-            println!("Repositories: {}", repos.len());
+    // 2. Build HolgerInstance
+    let instance = factory(config)?;
 
-            for repo in repos {
-                println!("  - {}", repo.name()); // kräver att traiten har `.name()`
-            }
-        }
-        Err(e) => {
-            eprintln!("❌ Fel vid registry-laddning: {e}");
-            std::process::exit(1);
-        }
-    }
+    // 3. For debugging
+    println!("Holger instance initialized with {} repositories", instance.repositories.len());
+
+    Ok(())
 }

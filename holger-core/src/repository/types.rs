@@ -3,7 +3,14 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 use crate::{ArtifactFormat, ArtifactId, Repository, RepositoryType, StorageEndpointInstance};
+use crate::exposed::ExposedEndpointInstance;
 
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct IOInstance {
+    pub storage: Arc<StorageEndpointInstance>,
+    pub endpoint: Arc<ExposedEndpointInstance>,
+}
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -11,17 +18,22 @@ pub struct RepositoryInstance {
     pub name: String,
     pub format: ArtifactFormat,
     pub repo_type: RepositoryType,
-    pub in_backend: Option<StorageEndpointInstance>,
-    pub out_backend: StorageEndpointInstance,
+    pub in_io: Option<IOInstance>,
+    pub out_io: Option<IOInstance>,
     pub upstreams: Vec<String>, // store names first; link phase later
     #[derivative(Debug = "ignore")]
     pub backend: Option<Arc<dyn RepositoryBackend>>
 }
 
 impl RepositoryInstance {
-    pub fn from_config<F>(cfg: &Repository, resolve_storage: &F) -> anyhow::Result<Self>
+    pub fn from_config<F, G>(
+        cfg: &Repository,
+        resolve_storage: &F,
+        resolve_endpoint: &G,
+    ) -> anyhow::Result<Self>
     where
-        F: Fn(&str) -> StorageEndpointInstance,
+        F: Fn(&str) -> anyhow::Result<Arc<StorageEndpointInstance>>,
+        G: Fn(&str) -> anyhow::Result<Arc<ExposedEndpointInstance>>,
     {
         let format = match cfg.ty {
             RepositoryType::Maven3 => ArtifactFormat::Maven3,
@@ -30,22 +42,35 @@ impl RepositoryInstance {
             RepositoryType::Raw => ArtifactFormat::Raw,
         };
 
-        let in_backend = cfg.r#in.as_ref().map(|in_cfg| resolve_storage(&in_cfg.storage_backend));
-        let out_backend = resolve_storage(&cfg.out.storage_backend);
+        // Handle optional in_io
+        let in_io = if let Some(ref in_cfg) = cfg.r#in {
+            Some(IOInstance {
+                storage: resolve_storage(&in_cfg.storage_backend)?,
+                endpoint: resolve_endpoint(&in_cfg.exposed_endpoint)?,
+            })
+        } else {
+            None
+        };
+
+        // Handle optional out_io
+        let out_io = if let Some(ref out_cfg) = cfg.out {
+            Some(IOInstance {
+                storage: resolve_storage(&out_cfg.storage_backend)?,
+                endpoint: resolve_endpoint(&out_cfg.exposed_endpoint)?,
+            })
+        } else {
+            None
+        };
 
         Ok(RepositoryInstance {
             name: cfg.name.clone(),
             format,
             repo_type: cfg.ty.clone(),
-            in_backend,
-            out_backend,
-            upstreams: cfg.upstreams.clone(), // keep strings first
+            in_io,
+            out_io,
+            upstreams: cfg.upstreams.clone(),
             backend: None,
         })
-    }
-
-    pub fn is_writable(&self) -> bool {
-        self.in_backend.is_some()
     }
 }
 
