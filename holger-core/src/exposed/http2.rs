@@ -29,22 +29,91 @@ use super::ExposedEndpointBackend;
 /// HTTP2 backend holding routing to repository backends
 pub struct Http2Backend {
     name: String,
+    listener_addr: String,
+    tls_config: Arc<ServerConfig>,
+    running: Arc<AtomicBool>,
+
     /// Maps sub-URL to the backend repository handling it
     pub routes: HashMap<String, Arc<dyn RepositoryBackend>>,
 }
 
 impl Http2Backend {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            routes: HashMap::new(),
-        }
-    }
 
     /// Register a repository backend to a sub-URL
     pub fn register_route(&mut self, sub_url: &str, backend: Arc<dyn RepositoryBackend>) {
         self.routes.insert(sub_url.to_string(), backend);
     }
+    /// Create backend from configuration (TLS paths + listen address)
+    pub fn new_from_config(
+        name: impl Into<String>,
+        cert_path: &str,
+        key_path: &str,
+        listen_addr: &str,
+    ) -> anyhow::Result<Self> {
+        let tls_cfg = load_tls_config(cert_path, key_path)?;
+        Ok(Self {
+            name: name.into(),
+            routes: HashMap::new(),
+            listener_addr: listen_addr.to_string(),
+            tls_config: Arc::new(tls_cfg),
+            running: Arc::new(AtomicBool::new(false)),
+        })
+    }
+    /// Start serving requests asynchronously (spawns a background task)
+    /// 2️⃣ Start serving HTTPS + HTTP/2 using the internal routing map
+    pub async fn start(self: Arc<Self>) -> anyhow::Result<JoinHandle<()>> {
+        let listener = TcpListener::bind(&self.listener_addr).await?;
+        let tls_acceptor = TlsAcceptor::from(self.tls_config.clone());
+        self.running.store(true, Ordering::SeqCst);
+
+        println!("Listening on https://{}", self.listener_addr);
+
+        let running = self.running.clone();
+        let handle = tokio::spawn(async move {
+            loop {
+                if !running.load(Ordering::SeqCst) {
+                    println!("Http2Backend stopped");
+                    break;
+                }
+
+                let Ok((stream, _)) = listener.accept().await else {
+                    eprintln!("TCP accept failed");
+                    continue;
+                };
+
+                let acceptor = tls_acceptor.clone();
+                let this = Arc::clone(&self);
+
+                tokio::spawn(async move {
+                    let Ok(tls_stream) = acceptor.accept(stream).await else {
+                        eprintln!("TLS handshake failed");
+                        return;
+                    };
+
+                    let io = TokioIo::new(tls_stream);
+                    let builder = http2::Builder::new(hyper_util::rt::TokioExecutor::new());
+
+                    if let Err(err) = builder
+                        .serve_connection(io, service_fn(move |req| {
+                            let this = Arc::clone(&this);
+                            async move { this.handle_request(req).await }
+                        }))
+                        .await
+                    {
+                        eprintln!("Connection error: {:?}", err);
+                    }
+                });
+            }
+        });
+
+        Ok(handle)
+    }
+
+    /// Stop/pause the server (loop in start() will exit)
+    pub fn stop(&self) {
+        self.running.store(false, Ordering::SeqCst);
+    }
+
 }
 
 #[async_trait::async_trait]
@@ -159,4 +228,25 @@ fn load_key(path: &Path) -> Result<PrivateKeyDer<'static>> {
 
     Err(anyhow::anyhow!("no private key found"))
 }
+
+
+/*******
+
+
+
+
+
+ */
+use std::sync::{ atomic::{AtomicBool, Ordering}};
+use tokio::task::JoinHandle;
+use hyper::server::conn::http2;
+use hyper_util::rt::TokioIo;
+
+
+
+/*
+
+
+ */
+
 
