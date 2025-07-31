@@ -38,20 +38,7 @@ impl RepositoryBackend for RustRepo {
         self
     }
 
- /*   fn handle_http2_request(
-        &self,
-        suburl: &str,
-        body: &[u8],
-    ) -> anyhow::Result<(u16, Vec<(String, String)>, Vec<u8>)> {
-        println!(
-            "Dummy handle_http2_request called: suburl={suburl}, body_len={}",
-            body.len()
-        );
 
-        // Return a 200 OK with no headers and empty body
-        Ok((200, Vec::new(), Vec::new()))
-    }
-*/
     fn handle_http2_request(
         &self,
         suburl: &str,
