@@ -59,56 +59,72 @@ async fn main() -> Result<()> {
 
 
 
-async fn handle_requestOLD(_req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>, hyper::Error> {
-    let body = Full::new(Bytes::from_static(b"Hello over HTTPS+HTTP2")).boxed();
-    Ok(Response::new(body))
-}
-async fn handle_request(req: Request<Body>) -> Result<Response<BoxBody<Bytes, Infallible>>, hyper::Error> {
-    let path = req.uri().path();
-    let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
 
-    match parts.as_slice() {
-        ["crates", crate_name, version, "download"] => {
-            println!("Download request: crate={} version={}", crate_name, version);
-            let body = Full::new(Bytes::from_static(b"OK")).boxed();
-            return Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/octet-stream")
-                .body(body)
-                .unwrap());
-        }
+use hyper::body::Body as _;
+use std::collections::HashMap;
+use once_cell::sync::Lazy;
 
-        ["config.json"] => {
-            println!("config.json requested");
-            let json = r#"{"dl":"https://127.0.0.1:8443/crates"}"#;
-            let body = Full::new(Bytes::from_static(json.as_bytes())).boxed();
-            return Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/json")
-                .body(body)
-                .unwrap());
-        }
 
-        ["index", crate_name] => {
-            println!("Index request: crate={}", crate_name);
-            let body = Full::new(Bytes::from_static(b"dummy-index-content")).boxed();
-            return Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "text/plain")
-                .body(body)
-                .unwrap());
-        }
 
-        _ => {
-            println!("Unhandled path: {}", path);
-            let body = Full::new(Bytes::from_static(b"Not found")).boxed();
-            return Ok(Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(body)
-                .unwrap());
+pub async fn handle_request(
+    req: Request<Body>,
+) -> Result<Response<BoxBody<Bytes, std::convert::Infallible>>, hyper::Error> {
+    let path = req.uri().path().to_string();
+    let suburl = path.trim_start_matches('/');
+
+    let body_bytes = req.into_body().collect().await?.to_bytes();
+    let body_vec = body_bytes.to_vec();
+
+
+    let mut repo_map: HashMap<String, Arc<dyn RepositoryBackend>> = HashMap::new();
+
+    let dummy_storage: StorageEndpointInstance = unsafe { std::mem::zeroed() }; // placeholder
+
+    repo_map.insert(
+        "crates".to_string(),
+        Arc::new(RustRepo {
+            name: "dummy".to_string(),
+            in_backend: None,
+            out_backend: dummy_storage,
+        }) as Arc<dyn RepositoryBackend>,
+    );
+
+    // Select repo based on first path segment
+    let repo_key = suburl.split('/').next().unwrap_or("");
+    if let Some(repo) = repo_map.get(repo_key) {
+        let suburl_owned = suburl.to_string();
+        let result = tokio::task::spawn_blocking({
+            let repo = Arc::clone(repo);
+            move || repo.handle_http2_request(&suburl_owned, &body_vec)
+        })
+            .await
+            .unwrap();
+
+        match result {
+            Ok((status, headers, data)) => {
+                let mut response = Response::builder()
+                    .status(StatusCode::from_u16(status).unwrap());
+                for (k, v) in headers {
+                    response = response.header(k, v);
+                }
+                Ok(response.body(Full::new(Bytes::from(data)).boxed()).unwrap())
+            }
+            Err(_) => Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from_static(b"Internal Error")).boxed())
+                .unwrap()),
         }
+    } else {
+        Ok(Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Full::new(Bytes::from_static(b"Repo Not Found")).boxed())
+            .unwrap())
     }
 }
+
+
+
+
 
 fn load_tls_config(cert_path: &str, key_path: &str) -> Result<ServerConfig> {
     println!("{}", std::env::current_dir()?.display());
@@ -138,6 +154,8 @@ fn load_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
 
 use rustls_pemfile::{Item, read_all};
 use tokio_rustls::rustls::pki_types::{PrivatePkcs8KeyDer, PrivateSec1KeyDer};
+use holger_core::repository::rust::RustRepo;
+use holger_core::{RepositoryBackend, StorageEndpointInstance};
 
 fn load_key(path: &Path) -> Result<PrivateKeyDer<'static>> {
     let file = File::open(path)?;

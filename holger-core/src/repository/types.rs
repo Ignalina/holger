@@ -106,5 +106,11 @@ pub trait RepositoryBackend: Send + Sync {
         }
         Ok(result)
     }
+    fn handle_http2_request(
+        &self,
+        suburl: &str,
+        body: &[u8],
+    ) -> anyhow::Result<(u16, Vec<(String, String)>, Vec<u8>)>;
 }
+
 

@@ -37,4 +37,66 @@ impl RepositoryBackend for RustRepo {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+ /*   fn handle_http2_request(
+        &self,
+        suburl: &str,
+        body: &[u8],
+    ) -> anyhow::Result<(u16, Vec<(String, String)>, Vec<u8>)> {
+        println!(
+            "Dummy handle_http2_request called: suburl={suburl}, body_len={}",
+            body.len()
+        );
+
+        // Return a 200 OK with no headers and empty body
+        Ok((200, Vec::new(), Vec::new()))
+    }
+*/
+    fn handle_http2_request(
+        &self,
+        suburl: &str,
+        body: &[u8],
+    ) -> anyhow::Result<(u16, Vec<(String, String)>, Vec<u8>)> {
+        let _ = body; // currently unused
+
+        let parts: Vec<&str> = suburl.trim_start_matches('/').split('/').collect();
+
+        match parts.as_slice() {
+            ["crates", crate_name, version, "download"] => {
+                println!("Download request: crate={} version={}", crate_name, version);
+                Ok((
+                    200,
+                    vec![("Content-Type".into(), "application/octet-stream".into())],
+                    b"OK".to_vec(),
+                ))
+            }
+
+            ["config.json"] => {
+                println!("config.json requested");
+                let json = r#"{"dl":"https://127.0.0.1:8443/crates"}"#;
+                Ok((
+                    200,
+                    vec![("Content-Type".into(), "application/json".into())],
+                    json.as_bytes().to_vec(),
+                ))
+            }
+
+            ["index", crate_name] => {
+                println!("Index request: crate={}", crate_name);
+                Ok((
+                    200,
+                    vec![("Content-Type".into(), "text/plain".into())],
+                    b"dummy-index-content".to_vec(),
+                ))
+            }
+
+            _ => {
+                println!("Unhandled path: {}", suburl);
+                Ok((404, Vec::new(), b"Not found".to_vec()))
+            }
+        }
+    }
+
 }
+
+

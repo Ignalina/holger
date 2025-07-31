@@ -35,7 +35,8 @@ pub fn factory(config: HolgerConfig) -> Result<HolgerInstance> {
                 e.name.clone(),
                 Arc::new(ExposedEndpointInstance {
                     name: e.name.clone(),
-                    url_prefix: e.url_prefix.clone(),
+//                    url_prefix: e.url_prefix.clone(),
+                    backend: None,
                 }),
             )
         })
