@@ -1,3 +1,8 @@
+use async_trait::async_trait;
+use bytes::Bytes;
+use hyper::{Request, Response, body::Incoming as Body};
+use http_body_util::combinators::BoxBody;
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -22,13 +27,17 @@ impl ExposedEndpointInstance {
     }
 }
 
-/// Core trait for all exposed endpoint backends (like HTTP/2 servers)
+
+#[async_trait]
 pub trait ExposedEndpointBackend: Send + Sync {
     /// Return the endpoint name
     fn name(&self) -> &str;
 
-    /// Handle an incoming request, delegating to repositories as needed
-    fn handle_request(&self, path: &str, body: &[u8]) -> anyhow::Result<Vec<u8>>;
+    /// Handle an incoming HTTP/2 request asynchronously
+    async fn handle_request(
+        &self,
+        req: Request<Body>,
+    ) -> Result<Response<BoxBody<Bytes, std::convert::Infallible>>, hyper::Error>;
 
     /// Allows downcasting for testing / special cases
     fn as_any(&self) -> &dyn Any;
