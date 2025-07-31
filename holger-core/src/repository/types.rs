@@ -2,6 +2,7 @@ use derivative::Derivative;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use async_trait::async_trait;
 use crate::{ArtifactFormat, ArtifactId, Repository, RepositoryType, StorageEndpointInstance};
 use crate::exposed::ExposedEndpointInstance;
 
@@ -75,6 +76,7 @@ impl RepositoryInstance {
 }
 
 /// Core trait for all repository types
+#[async_trait]
 pub trait RepositoryBackend: Send + Sync {
     fn name(&self) -> &str;
     fn format(&self) -> ArtifactFormat;

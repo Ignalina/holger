@@ -30,6 +30,7 @@ use super::ExposedEndpointBackend;
 pub struct Http2Backend {
     name: String,
     listener_addr: String,
+    port: u16,
     tls_config: Arc<ServerConfig>,
     running: Arc<AtomicBool>,
 
@@ -49,12 +50,14 @@ impl Http2Backend {
         cert_path: &str,
         key_path: &str,
         listen_addr: &str,
+        port: u16,
     ) -> anyhow::Result<Self> {
         let tls_cfg = load_tls_config(cert_path, key_path)?;
         Ok(Self {
             name: name.into(),
             routes: HashMap::new(),
             listener_addr: listen_addr.to_string(),
+            port,
             tls_config: Arc::new(tls_cfg),
             running: Arc::new(AtomicBool::new(false)),
         })
@@ -109,10 +112,6 @@ impl Http2Backend {
         Ok(handle)
     }
 
-    /// Stop/pause the server (loop in start() will exit)
-    pub fn stop(&self) {
-        self.running.store(false, Ordering::SeqCst);
-    }
 
 }
 
@@ -167,6 +166,16 @@ impl ExposedEndpointBackend for Http2Backend {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    async fn start(&self) -> Result<()> {
+        println!("Starting HTTP2 backend on {}:{}", self.listener_addr, self.port);
+        Ok(())
+    }
+
+    async fn stop(&self) -> Result<()> {
+        self.running.store(false, Ordering::SeqCst);
+        Ok(())
     }
 }
 

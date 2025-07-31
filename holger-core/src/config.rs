@@ -33,15 +33,14 @@ pub fn factory(config: HolgerConfig) -> Result<HolgerInstance> {
         .map(|e| {
             (
                 e.name.clone(),
-                Arc::new(ExposedEndpointInstance {
-                    name: e.name.clone(),
-//                    url_prefix: e.url_prefix.clone(),
-                    backend: None,
-                }),
+                Arc::new(ExposedEndpointInstance::new(
+                    e.name.clone(),
+                    e.ip.clone(),
+                    e.port,
+                )),
             )
         })
         .collect();
-
     // 3. Build repository instances
     let mut repositories: Vec<Arc<RepositoryInstance>> = Vec::new();
     for r in config.repositories {

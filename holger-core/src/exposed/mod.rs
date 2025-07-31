@@ -14,14 +14,22 @@ pub mod http2;
 #[derivative(Debug)]
 pub struct ExposedEndpointInstance {
     pub name: String,
+    pub ip: String,
+    pub port: u16,
     #[derivative(Debug = "ignore")]
     pub backend: Option<Arc<dyn ExposedEndpointBackend>>,
 }
 
 impl ExposedEndpointInstance {
-    pub fn new(name: impl Into<String>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        ip: impl Into<String>,
+        port: u16,
+    ) -> Self {
         ExposedEndpointInstance {
             name: name.into(),
+            ip: ip.into(),
+            port,
             backend: None,
         }
     }
@@ -41,4 +49,7 @@ pub trait ExposedEndpointBackend: Send + Sync {
 
     /// Allows downcasting for testing / special cases
     fn as_any(&self) -> &dyn Any;
+    async fn start(&self) -> anyhow::Result<()>;
+    async fn stop(&self) -> anyhow::Result<()>;
+
 }
