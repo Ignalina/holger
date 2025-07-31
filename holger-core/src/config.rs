@@ -7,10 +7,14 @@ use crate::types::HolgerConfig;
 use serde::Deserialize;
 use crate::repository::ExposedEndpointInstance;
 use crate::repository::types::RepositoryInstance;
-use crate::{ StorageEndpointInstance};
+use crate::{RepositoryBackend, StorageEndpointInstance};
 
-pub fn factory(config:HolgerConfig)  {
-
+pub fn factory(config:HolgerConfig) -> Result<HolgerInstance>  {
+    Ok(HolgerInstance {
+        exposed_endpoints: Vec::new(),
+        storage_endpoints: Vec::new(),
+        repositories: Vec::new(),
+    })
 }
 
 pub fn load_config_from_path<P: AsRef<Path>>(path: P) -> Result<HolgerConfig> {
@@ -22,7 +26,7 @@ pub fn load_config_from_path<P: AsRef<Path>>(path: P) -> Result<HolgerConfig> {
 pub struct HolgerInstance {
     pub exposed_endpoints: Vec<Arc<ExposedEndpointInstance>>,
     pub storage_endpoints: Vec<Arc<StorageEndpointInstance>>,
-    pub repositories: Vec<Arc<RepositoryInstance>>,
+    pub repositories: Vec<Arc<RepositoryInstance>>
 }
 
 

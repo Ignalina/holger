@@ -1,9 +1,12 @@
+use derivative::Derivative;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 use crate::{ArtifactFormat, ArtifactId, Repository, RepositoryType, StorageEndpointInstance};
 
-#[derive(Debug)]
+
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct RepositoryInstance {
     pub name: String,
     pub format: ArtifactFormat,
@@ -11,6 +14,8 @@ pub struct RepositoryInstance {
     pub in_backend: Option<StorageEndpointInstance>,
     pub out_backend: StorageEndpointInstance,
     pub upstreams: Vec<String>, // store names first; link phase later
+    #[derivative(Debug = "ignore")]
+    pub backend: Option<Arc<dyn RepositoryBackend>>
 }
 
 impl RepositoryInstance {
@@ -35,6 +40,7 @@ impl RepositoryInstance {
             in_backend,
             out_backend,
             upstreams: cfg.upstreams.clone(), // keep strings first
+            backend: None,
         })
     }
 
