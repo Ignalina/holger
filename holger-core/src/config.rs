@@ -1,117 +1,115 @@
 use crate::repository::rust::RustRepo;
 use crate::repository::types::IOInstance;
-use anyhow::Result;
 use std::fs;
 use std::path::Path;
-use std::sync::Arc;
-use crate::exposed::http2::Http2Backend;
 
-use crate::exposed::ExposedEndpointInstance;
-use std::collections::HashMap;
+use crate::exposed::{ExposedEndpointBackend, ExposedEndpointInstance};
 use url::Url;
 use crate::{
     ArtifactFormat, HolgerConfig, RepositoryInstance, RepositoryBackend, StorageEndpointInstance,
     RepositoryType, StorageType,
 };
+use std::collections::HashMap;
+use std::sync::Arc;
+use anyhow::Result;
+use crate::exposed::http2::Http2Backend;
 
-pub fn factory(config: HolgerConfig) -> Result<HolgerInstance> {
-    // 1. Build storage endpoints
-    let storage_map: HashMap<String, Arc<StorageEndpointInstance>> = config
-        .storage_endpoints
-        .iter()
-        .map(|s| {
-            let inst = match s.ty {
-                StorageType::Znippy => StorageEndpointInstance::Znippy { path: s.path.clone().into() },
-                StorageType::Rocksdb => StorageEndpointInstance::Rocksdb { path: s.path.clone().into() },
-            };
-            (s.name.clone(), Arc::new(inst))
-        })
-        .collect();
+pub fn factory(config: &HolgerConfig) -> Result<HolgerInstance> {
+    // 1. Build StorageEndpointInstances
+    let mut storage_map: HashMap<String, Arc<StorageEndpointInstance>> = HashMap::new();
+    let mut storage_endpoints = Vec::new();
 
-    // 2. Build exposed endpoints
-    let exposed_map: HashMap<String, Arc<ExposedEndpointInstance>> = config
-        .exposed_endpoints
-        .iter()
-        .map(|e| {
-            // Parse `url_prefix` into host + port
-            let url = Url::parse(&e.url_prefix)
-                .unwrap_or_else(|_| panic!("Invalid url_prefix for endpoint {}", e.name));
+    for se in &config.storage_endpoints {
+        let instance = Arc::new(StorageEndpointInstance::from_config(se)?);
+        storage_map.insert(se.name.clone(), instance.clone());
+        storage_endpoints.push(instance);
+    }
 
-            let host = url.host_str().unwrap_or("127.0.0.1").to_string();
-            let port = url.port_or_known_default().unwrap_or(80);
+    // 2. Build ExposedEndpointInstances
+    let mut endpoint_map: HashMap<String, Arc<ExposedEndpointInstance>> = HashMap::new();
+    let mut exposed_endpoints = Vec::new();
 
-            (
-                e.name.clone(),
-                Arc::new(ExposedEndpointInstance::new(
-                    e.name.clone(),
-                    host,
-                    port,
-                )),
-            )
-        })
-        .collect();        
+    for ep in &config.exposed_endpoints {
+        // ✅ Only 4 args; from_config parses ip/port from url_prefix
+        let backend: Arc<Http2Backend> = Http2Backend::from_config(
+            ep.name.clone(),
+            &ep.url_prefix,
+            &ep.cert,
+            &ep.key,
+        )?;
 
-    // 3. Build repository instances
-    let mut repositories: Vec<Arc<RepositoryInstance>> = Vec::new();
-    for r in config.repositories {
-        // Create IOInstance for `in` if present
-        let in_io = r.r#in.as_ref().and_then(|in_cfg| {
-            let storage = storage_map.get(&in_cfg.storage_backend)?;
-            let endpoint = exposed_map.get(&in_cfg.exposed_endpoint)?;
-            Some(IOInstance {
-                storage: storage.clone(),
-                endpoint: endpoint.clone(),
-            })
+        // Cast to Arc<dyn ExposedEndpointBackend>
+        let backend_arc: Arc<dyn ExposedEndpointBackend> = backend.clone();
+
+        let (ip, port) = parse_ip_port(&ep.url_prefix);
+        let instance = Arc::new(ExposedEndpointInstance {
+            name: ep.name.clone(),
+            ip,
+            port,
+            routes: HashMap::new(),
+            backend: backend_arc,
         });
 
-        // Create IOInstance for `out` if present
-        let out_io = r.out.as_ref().and_then(|out_cfg| {
-            let storage = storage_map.get(&out_cfg.storage_backend)?;
-            let endpoint = exposed_map.get(&out_cfg.exposed_endpoint)?;
-            Some(IOInstance {
-                storage: storage.clone(),
-                endpoint: endpoint.clone(),
-            })
-        });
+        endpoint_map.insert(ep.name.clone(), instance.clone());
+        exposed_endpoints.push(instance);
+    }
 
-        // Optional backend depending on type
-        let backend: Option<Arc<dyn RepositoryBackend>> = match r.ty {
-            RepositoryType::Rust => {
-                if let Some(out_io_ref) = &out_io {
-                    Some(Arc::new(RustRepo {
-                        name: r.name.clone(),
-                        in_backend: in_io.as_ref().map(|io| (*io.storage).clone()),
-                        out_backend: (*out_io_ref.storage).clone(),
-                    }))
-                } else {
-                    None
-                }
+    // 3. Prepare resolver closures
+    let resolve_storage = |name: &str| {
+        storage_map
+            .get(name)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Storage endpoint '{}' not found", name))
+    };
+
+    let resolve_endpoint = |name: &str| {
+        endpoint_map
+            .get(name)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Exposed endpoint '{}' not found", name))
+    };
+
+    // 4. Build RepositoryInstances
+    let mut repositories = Vec::new();
+    for r in &config.repositories {
+        let repo = Arc::new(RepositoryInstance::from_config(
+            r,
+            &resolve_storage,
+            &resolve_endpoint,
+        )?);
+        repositories.push(repo);
+    }
+
+    // 5. Wire up routes: each repo attaches itself to its endpoint
+    for repo in &repositories {
+        if let Some(out_io) = &repo.out_io {
+            let ep_name = &out_io.endpoint.name;
+            if let Some(endpoint_arc) = endpoint_map.get(ep_name) {
+                // We cannot modify through Arc directly without Mutex,
+                // so clone a new instance with updated routes if needed
+                // Or design routes to be RwLock if dynamic routing required.
+                // For now, just log/skip mut insert if immutable
+                // println!("Attaching {} to endpoint {}", repo.name, ep_name);
             }
-            _ => None,
-        };
-
-        repositories.push(Arc::new(RepositoryInstance {
-            name: r.name.clone(),
-            format: match r.ty {
-                RepositoryType::Maven3 => ArtifactFormat::Maven3,
-                RepositoryType::Pip => ArtifactFormat::Pip,
-                RepositoryType::Rust => ArtifactFormat::Rust,
-                RepositoryType::Raw => ArtifactFormat::Raw,
-            },
-            repo_type: r.ty,
-            in_io,
-            out_io,
-            upstreams: r.upstreams.clone(),
-            backend,
-        }));
+        }
     }
 
     Ok(HolgerInstance {
-        exposed_endpoints: exposed_map.values().cloned().collect(),
-        storage_endpoints: storage_map.values().cloned().collect(),
+        exposed_endpoints,
+        storage_endpoints,
         repositories,
     })
 }
+/// Inline helper to parse IP + port from URL
+fn parse_ip_port(url: &str) -> (String, u16) {
+    let clean = url.trim_end_matches('/');
+    let without_scheme = clean.split("://").nth(1).unwrap_or(clean);
+    let mut parts = without_scheme.split(':');
+    let ip = parts.next().unwrap_or("127.0.0.1").to_string();
+    let port = parts.next().and_then(|p| p.parse().ok()).unwrap_or(443);
+    (ip, port)
+}
+
 
 
 pub fn load_config_from_path<P: AsRef<Path>>(path: P) -> Result<HolgerConfig> {
@@ -131,7 +129,7 @@ impl HolgerInstance {
     pub fn start(&self) -> anyhow::Result<()> {
         self.exposed_endpoints
             .iter()
-            .filter_map(|ep| ep.backend.as_ref())
+            .map(|ep| ep.backend.as_ref()) // just map, no filter_map
             .try_for_each(|backend| backend.start())?;
         Ok(())
     }
@@ -139,8 +137,9 @@ impl HolgerInstance {
     pub fn stop(&self) -> anyhow::Result<()> {
         self.exposed_endpoints
             .iter()
-            .filter_map(|ep| ep.backend.as_ref())
+            .map(|ep| ep.backend.as_ref())
             .try_for_each(|backend| backend.stop())?;
         Ok(())
     }
 }
+

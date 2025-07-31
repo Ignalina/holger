@@ -7,6 +7,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 use derivative::Derivative;
+use crate::RepositoryInstance;
 
 pub mod http2;
 
@@ -16,8 +17,9 @@ pub struct ExposedEndpointInstance {
     pub name: String,
     pub ip: String,
     pub port: u16,
+    pub routes: HashMap<String, Arc<RepositoryInstance>>,
     #[derivative(Debug = "ignore")]
-    pub backend: Option<Arc<dyn ExposedEndpointBackend>>,
+    pub backend: Arc<dyn ExposedEndpointBackend>,
 }
 
 impl ExposedEndpointInstance {
@@ -25,12 +27,15 @@ impl ExposedEndpointInstance {
         name: impl Into<String>,
         ip: impl Into<String>,
         port: u16,
+        backend: Arc<dyn ExposedEndpointBackend>,
+        routes: HashMap<String, Arc<RepositoryInstance>>,
     ) -> Self {
         ExposedEndpointInstance {
             name: name.into(),
             ip: ip.into(),
             port,
-            backend: None,
+            routes,
+            backend,
         }
     }
 }

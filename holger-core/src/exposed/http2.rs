@@ -52,6 +52,36 @@ impl Http2Backend {
         }
     }
 
+    pub fn from_config(
+        name: impl Into<String>,
+        url_prefix: &str,
+        cert_path: &str,
+        key_path: &str,
+    ) -> anyhow::Result<Arc<Self>> {
+        // Parse host and port from the URL
+        let (host, port) = Self::parse_ip_port(url_prefix);
+        let tls_config = Arc::new(load_tls_config(cert_path, key_path)?);
+
+        // Compose listener address like "host:port"
+        let listener_addr = format!("{}:{}", host, port);
+
+        Ok(Arc::new(Http2Backend::new(
+            name.into(),
+            listener_addr,
+            port,
+            tls_config,
+        )))
+    }
+
+    fn parse_ip_port(url: &str) -> (String, u16) {
+        let clean = url.trim_end_matches('/');
+        let without_scheme = clean.split("://").nth(1).unwrap_or(clean);
+        let mut parts = without_scheme.split(':');
+        let ip = parts.next().unwrap_or("127.0.0.1").to_string();
+        let port = parts.next().and_then(|p| p.parse().ok()).unwrap_or(443);
+        (ip, port)
+    }
+
     /// ✅ Now takes &self, safe to call from factory
     /// Start serving requests asynchronously (spawns a background task)
     /// 2️⃣ Start serving HTTPS + HTTP/2 using the internal routing map

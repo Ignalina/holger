@@ -44,6 +44,8 @@ pub enum RepositoryType {
 pub struct ExposedEndpoint {
     pub name: String,
     pub url_prefix: String,
+    pub cert: String,
+    pub key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
