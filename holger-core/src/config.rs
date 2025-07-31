@@ -8,7 +8,7 @@ use crate::exposed::http2::Http2Backend;
 
 use crate::exposed::ExposedEndpointInstance;
 use std::collections::HashMap;
-
+use url::Url;
 use crate::{
     ArtifactFormat, HolgerConfig, RepositoryInstance, RepositoryBackend, StorageEndpointInstance,
     RepositoryType, StorageType,
@@ -33,16 +33,23 @@ pub fn factory(config: HolgerConfig) -> Result<HolgerInstance> {
         .exposed_endpoints
         .iter()
         .map(|e| {
+            // Parse `url_prefix` into host + port
+            let url = Url::parse(&e.url_prefix)
+                .unwrap_or_else(|_| panic!("Invalid url_prefix for endpoint {}", e.name));
+
+            let host = url.host_str().unwrap_or("127.0.0.1").to_string();
+            let port = url.port_or_known_default().unwrap_or(80);
+
             (
                 e.name.clone(),
                 Arc::new(ExposedEndpointInstance::new(
                     e.name.clone(),
-                    e.ip.clone(),
-                    e.port,
+                    host,
+                    port,
                 )),
             )
         })
-        .collect();
+        .collect();        
 
     // 3. Build repository instances
     let mut repositories: Vec<Arc<RepositoryInstance>> = Vec::new();

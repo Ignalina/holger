@@ -12,6 +12,8 @@ fn main() -> anyhow::Result<()> {
 
     // 3. For debugging
     println!("Holger instance initialized with {} repositories", instance.repositories.len());
+    let res=instance.start();
+    println!("Holger instance initialized with {:?} repositories",res);
 
     Ok(())
 }
