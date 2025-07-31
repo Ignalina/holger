@@ -35,6 +35,63 @@ All `.artifact` files are immutable. However, Holger can optionally be configure
 - Live proxy mode can be disabled completely in strict environments.
 
 ## Architecture
+Newest on top , older if you scroll down.
+
+
+```mermaid
+flowchart LR
+    %% ===== CONFIG LAYER =====
+    CConfig["Holger Config (TOML/JSON)"]
+    CRepos["repositories[]"]
+    CExposed["exposed_endpoints[]"]
+    CStorage["storage_endpoints[]"]
+
+    CConfig --> CRepos
+    CConfig --> CExposed
+    CConfig --> CStorage
+
+    %% ===== RUNTIME INSTANCES =====
+    subgraph RuntimeInstances
+        direction LR
+
+        subgraph RepoInst["Repository Instances"]
+            RRepo["RepositoryInstance"]
+            RRepoBackend["RepositoryBackend"]
+            IOIn["IOInstance (in)"]
+            IOOut["IOInstance (out)"]
+        end
+
+        subgraph ExposedInst["Exposed Endpoints"]
+            RExposed["ExposedEndpointInstance"]
+            RExposedBackend["ExposedEndpointBackend"]
+        end
+
+        subgraph StorageInst["Storage Endpoints"]
+            RStorage["StorageEndpointInstance"]
+        end
+    end
+
+    %% ===== LINKS FROM CONFIG TO RUNTIME =====
+    CRepos -->|from_config| RRepo
+    CExposed --> RExposed
+    CStorage --> RStorage
+
+    %% ===== RUNTIME INTERNAL RELATIONSHIPS =====
+    RRepo -->|"backend: Option<Arc<dyn RepositoryBackend>>"| RRepoBackend
+    RExposed -->|"backend: Option<Arc<dyn ExposedEndpointBackend>>"| RExposedBackend
+
+    %% IOInstance wiring
+    RRepo --> IOIn
+    RRepo --> IOOut
+    IOIn --> RStorage
+    IOIn --> RExposed
+    IOOut --> RStorage
+    IOOut --> RExposed
+
+    %% ExposedEndpoint routing to RepositoryBackend
+    RExposedBackend -->|"route_request_by_subURL"| RRepoBackend
+```
+
 
 ```mermaid
 flowchart LR
