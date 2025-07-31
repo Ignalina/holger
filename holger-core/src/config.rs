@@ -1,16 +1,18 @@
 use crate::repository::rust::RustRepo;
 use crate::repository::types::IOInstance;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use crate::exposed::http2::Http2Backend;
 
-use serde::Deserialize;
 use crate::exposed::ExposedEndpointInstance;
-
 use std::collections::HashMap;
 
-use crate::{ArtifactFormat, HolgerConfig, RepositoryInstance, RepositoryBackend, StorageEndpointInstance, RepositoryType, StorageType};
+use crate::{
+    ArtifactFormat, HolgerConfig, RepositoryInstance, RepositoryBackend, StorageEndpointInstance,
+    RepositoryType, StorageType,
+};
 
 pub fn factory(config: HolgerConfig) -> Result<HolgerInstance> {
     // 1. Build storage endpoints
@@ -19,8 +21,8 @@ pub fn factory(config: HolgerConfig) -> Result<HolgerInstance> {
         .iter()
         .map(|s| {
             let inst = match s.ty {
-                crate::StorageType::Znippy => StorageEndpointInstance::Znippy { path: s.path.clone().into() },
-                crate::StorageType::Rocksdb => StorageEndpointInstance::Rocksdb { path: s.path.clone().into() },
+                StorageType::Znippy => StorageEndpointInstance::Znippy { path: s.path.clone().into() },
+                StorageType::Rocksdb => StorageEndpointInstance::Rocksdb { path: s.path.clone().into() },
             };
             (s.name.clone(), Arc::new(inst))
         })
@@ -41,6 +43,7 @@ pub fn factory(config: HolgerConfig) -> Result<HolgerInstance> {
             )
         })
         .collect();
+
     // 3. Build repository instances
     let mut repositories: Vec<Arc<RepositoryInstance>> = Vec::new();
     for r in config.repositories {
@@ -102,17 +105,35 @@ pub fn factory(config: HolgerConfig) -> Result<HolgerInstance> {
         repositories,
     })
 }
+
+
 pub fn load_config_from_path<P: AsRef<Path>>(path: P) -> Result<HolgerConfig> {
     let data = fs::read_to_string(path)?;
     let config: HolgerConfig = toml::from_str(&data)?;
     Ok(config)
 }
+
 #[derive(Debug)]
 pub struct HolgerInstance {
     pub exposed_endpoints: Vec<Arc<ExposedEndpointInstance>>,
     pub storage_endpoints: Vec<Arc<StorageEndpointInstance>>,
-    pub repositories: Vec<Arc<RepositoryInstance>>
+    pub repositories: Vec<Arc<RepositoryInstance>>,
 }
 
+impl HolgerInstance {
+    pub fn start(&self) -> anyhow::Result<()> {
+        self.exposed_endpoints
+            .iter()
+            .filter_map(|ep| ep.backend.as_ref())
+            .try_for_each(|backend| backend.start())?;
+        Ok(())
+    }
 
-
+    pub fn stop(&self) -> anyhow::Result<()> {
+        self.exposed_endpoints
+            .iter()
+            .filter_map(|ep| ep.backend.as_ref())
+            .try_for_each(|backend| backend.stop())?;
+        Ok(())
+    }
+}

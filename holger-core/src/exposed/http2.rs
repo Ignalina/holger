@@ -16,7 +16,7 @@ use tokio_rustls::{TlsAcceptor, TlsStream};
 use tokio_rustls::rustls::{ServerConfig, pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer}};
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
@@ -25,43 +25,34 @@ use hyper::{Request, Response, StatusCode};
 use crate::{RepositoryBackend, StorageEndpointInstance};
 use crate::repository::rust::RustRepo;
 use super::ExposedEndpointBackend;
-
+use std::any::Any;
 /// HTTP2 backend holding routing to repository backends
 pub struct Http2Backend {
-    name: String,
-    listener_addr: String,
-    port: u16,
-    tls_config: Arc<ServerConfig>,
-    running: Arc<AtomicBool>,
-
-    /// Maps sub-URL to the backend repository handling it
+    pub  name: String,
+    pub listener_addr: String,
+    pub port: u16,
+    pub tls_config: Arc<ServerConfig>,
+    pub running: Arc<AtomicBool>,
     pub routes: HashMap<String, Arc<dyn RepositoryBackend>>,
+
+
 }
 
 impl Http2Backend {
 
     /// Register a repository backend to a sub-URL
-    pub fn register_route(&mut self, sub_url: &str, backend: Arc<dyn RepositoryBackend>) {
-        self.routes.insert(sub_url.to_string(), backend);
-    }
-    /// Create backend from configuration (TLS paths + listen address)
-    pub fn new_from_config(
-        name: impl Into<String>,
-        cert_path: &str,
-        key_path: &str,
-        listen_addr: &str,
-        port: u16,
-    ) -> anyhow::Result<Self> {
-        let tls_cfg = load_tls_config(cert_path, key_path)?;
-        Ok(Self {
-            name: name.into(),
-            routes: HashMap::new(),
-            listener_addr: listen_addr.to_string(),
+    pub fn new(name: String, listener_addr: String, port: u16,tls_config: Arc<ServerConfig>) -> Self {
+        Self {
+            name,
+            listener_addr,
             port,
-            tls_config: Arc::new(tls_cfg),
-            running: Arc::new(AtomicBool::new(false)),
-        })
+            tls_config,
+            running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            routes:  HashMap::new(),
+        }
     }
+
+    /// ✅ Now takes &self, safe to call from factory
     /// Start serving requests asynchronously (spawns a background task)
     /// 2️⃣ Start serving HTTPS + HTTP/2 using the internal routing map
     pub async fn start(self: Arc<Self>) -> anyhow::Result<JoinHandle<()>> {
@@ -168,13 +159,18 @@ impl ExposedEndpointBackend for Http2Backend {
         self
     }
 
-    async fn start(&self) -> Result<()> {
+    fn start(&self) -> anyhow::Result<()> {
         println!("Starting HTTP2 backend on {}:{}", self.listener_addr, self.port);
+        // Here you would normally bind the TCP listener and spawn the server thread.
+        // For now, just mark as running.
+        self.running.store(true, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 
-    async fn stop(&self) -> Result<()> {
-        self.running.store(false, Ordering::SeqCst);
+    fn stop(&self) -> anyhow::Result<()> {
+        // Signal the server loop to exit
+        self.running.store(false, std::sync::atomic::Ordering::SeqCst);
+        println!("Stopping HTTP2 backend on {}:{}", self.listener_addr, self.port);
         Ok(())
     }
 }

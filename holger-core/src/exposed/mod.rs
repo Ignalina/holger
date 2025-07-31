@@ -49,7 +49,9 @@ pub trait ExposedEndpointBackend: Send + Sync {
 
     /// Allows downcasting for testing / special cases
     fn as_any(&self) -> &dyn Any;
-    async fn start(&self) -> anyhow::Result<()>;
-    async fn stop(&self) -> anyhow::Result<()>;
+    fn start(&self) -> anyhow::Result<()>;
+
+    /// Stop the backend and block until stopped
+    fn stop(&self) -> anyhow::Result<()>;
 
 }
