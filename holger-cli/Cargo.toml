@@ -7,7 +7,7 @@ description = "Holger guards your artifacts at rest."
 license = "MIT"
 repository = "https://github.com/Ignalina/holger"
 readme = "../README.md"
-categories = ["artifacts", "airgap", "data-structures"]    
+categories = ["command-line-utilities","development-tools"]
 keywords = ["znippy", "zstd", "parallel", "arrow", "blake3"]
 
 [dependencies]
