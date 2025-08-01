@@ -25,9 +25,29 @@ pub fn factory(config: &HolgerConfig) -> Result<HolgerInstance> {
         storage_endpoints.push(instance);
     }
 
+    // 2. Prepare resolver closures for storage
+    let resolve_storage = |name: &str| {
+        storage_map
+            .get(name)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Storage endpoint '{}' not found", name))
+    };
+
+    // 3. Aggregate repositories and routes (endpoint resolver is a dummy for now)
+    let dummy_endpoint_resolver = |_name: &str| -> anyhow::Result<Arc<ExposedEndpointInstance>> {
+        Err(anyhow::anyhow!(
+            "Endpoint lookup used before endpoints were constructed"
+        ))
+    };
+
+    let (repositories, mut endpoint_routes) =
+        aggregate_routes(config, &resolve_storage, &dummy_endpoint_resolver)?;
+
+    // 4. Build ExposedEndpointInstances with their aggregated routes
+    let mut endpoint_map: HashMap<String, Arc<ExposedEndpointInstance>> = HashMap::new();
+    let mut exposed_endpoints = Vec::new();
 
     for ep in &config.exposed_endpoints {
-        // ✅ Only 4 args; from_config parses ip/port from url_prefix
         let backend: Arc<Http2Backend> = Http2Backend::from_config(
             ep.name.clone(),
             &ep.url_prefix,
@@ -35,21 +55,47 @@ pub fn factory(config: &HolgerConfig) -> Result<HolgerInstance> {
             &ep.key,
         )?;
 
-        // Cast to Arc<dyn ExposedEndpointBackend>
         let backend_arc: Arc<dyn ExposedEndpointBackend> = backend.clone();
-
         let (ip, port) = parse_ip_port(&ep.url_prefix);
+
+        let routes = endpoint_routes
+            .remove(&ep.name)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|repo| (repo.name.clone(), repo))
+            .collect();
+
         let instance = Arc::new(ExposedEndpointInstance {
             name: ep.name.clone(),
             ip,
             port,
-            routes: HashMap::new(),
+            routes,
             backend: backend_arc,
         });
 
         endpoint_map.insert(ep.name.clone(), instance.clone());
         exposed_endpoints.push(instance);
     }
+
+    Ok(HolgerInstance {
+        exposed_endpoints,
+        storage_endpoints,
+        repositories,
+    })
+}
+
+pub fn factory2(config: &HolgerConfig) -> Result<HolgerInstance> {
+    // 1. Build StorageEndpointInstances
+    let mut storage_map: HashMap<String, Arc<StorageEndpointInstance>> = HashMap::new();
+    let mut storage_endpoints = Vec::new();
+
+    for se in &config.storage_endpoints {
+        let instance = Arc::new(StorageEndpointInstance::from_config(se)?);
+        storage_map.insert(se.name.clone(), instance.clone());
+        storage_endpoints.push(instance);
+    }
+
+
 
     // 3. Prepare resolver closures
     let resolve_storage = |name: &str| {
