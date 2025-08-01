@@ -1,8 +1,8 @@
 [[exposed_endpoints]]
 name = "prod"
 url_prefix = "https://10.101.1.9:8443"
-cert = "holger-core/tests/cert.pem"
-key = "holger-core/tests/key.pem"
+cert = "/home/rickard/RustroverProjects/holger/holger-core/tests/certs/cert.pem"
+key = "/home/rickard/RustroverProjects/holger/holger-core/tests/certs/key.pem"
 
 [[storage_endpoints]]
 name = "artifact-prod"

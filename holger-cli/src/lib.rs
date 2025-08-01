@@ -3,7 +3,8 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use anyhow::Result;
-
+use holger_core::config::factory;
+use holger_core::load_config_from_path;
 
 #[derive(Parser)]
 #[command(name = "holger")]
@@ -20,12 +21,6 @@ enum Commands {
         #[arg(short, long)]
         config: PathBuf,
 
-        #[arg(short, long)]
-        cert: PathBuf,
-
-        #[arg(short, long)]
-        key: PathBuf,
-
     },
 
 }
@@ -35,8 +30,27 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Start { config, cert, key } => {
-            !todo!()
+        Commands::Start { config} => {
+            println!("Starting Holger {:?}",config);
+
+            let config = load_config_from_path(config)?;
+            let holger = factory(&config)?;
+            holger.start()?;
+
+            println!("Holger is running. Press Ctrl+C to stop.");
+
+            // ✅ Block until Ctrl+C
+            let (tx, rx) = std::sync::mpsc::channel();
+            ctrlc::set_handler(move || {
+                let _ = tx.send(());
+            })?;
+
+            // Wait for signal
+            rx.recv().expect("Failed to receive signal");
+
+            holger.stop()?;
+            println!("Holger stopped.");
+//            Ok(())
         }
     }
 
