@@ -11,4 +11,4 @@ categories = ["command-line-utilities", "artifacts"]
 keywords = ["znippy", "artifacts", "blake3", "cli","airgap"]
 
 [dependencies]
-holger-core = "0.0.1"
+holger-cli = "0.0.1"

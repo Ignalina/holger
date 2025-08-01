@@ -1,6 +1,6 @@
 [[exposed_endpoints]]
 name = "prod"
-url_prefix = "http://10.1.2.10/"
+url_prefix = "https://10.101.1.9:8443"
 cert = "holger-core/tests/cert.pem"
 key = "holger-core/tests/key.pem"
 
