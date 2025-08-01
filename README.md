@@ -2,7 +2,8 @@
 
 **Holger guards your artifacts at rest.**
 
-Immutable Rust-based artifact airgaper. Holger ingests language-specific package trees and serves them over standardized APIs, just like Artifactory or Nexus — but with an airgapped, append-only backend called **artifact**, based on Znippy archives.
+Immutable Rust-based artifact airgaper. Holger ingests language-specific package trees and serves them over standardized APIs, just like Artifactory or Nexus — but with an airgapped, append-only backend called **artifact**, based on Znippy archives.  
+-->NOTE Holger projekt just started , come back later <--
 
 ## Overview
 
