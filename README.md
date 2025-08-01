@@ -44,6 +44,8 @@ type = "rust"
 out = { storage_backend = "artifact-prod", exposed_endpoint = "prod" }
 ```
 
+## Fan art
+
 
 
 ## Holger serving imutable historized archives
