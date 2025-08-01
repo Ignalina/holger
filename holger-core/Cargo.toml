@@ -4,6 +4,15 @@ version = "0.0.1"
 edition = "2021"
 authors = ["Rickard Lundin <rickard@x14.se>","Wilhelm Ågren"]
 
+
+description = "Holger guards your artifacts at rest. May Allfather Odin watch over every bit."
+license = "MIT"
+repository = "https://github.com/Ignalina/holger"
+readme = "../README.md"
+categories = ["command-line-utilities", "artifacts"]
+keywords = ["znippy", "artifacts", "blake3", "cli","airgap"]
+
+
 [dependencies]
 
 futures-util = { version = "0.3", default-features = false }
