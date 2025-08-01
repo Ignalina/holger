@@ -25,9 +25,6 @@ pub fn factory(config: &HolgerConfig) -> Result<HolgerInstance> {
         storage_endpoints.push(instance);
     }
 
-    // 2. Build ExposedEndpointInstances
-    let mut endpoint_map: HashMap<String, Arc<ExposedEndpointInstance>> = HashMap::new();
-    let mut exposed_endpoints = Vec::new();
 
     for ep in &config.exposed_endpoints {
         // ✅ Only 4 args; from_config parses ip/port from url_prefix
@@ -70,28 +67,40 @@ pub fn factory(config: &HolgerConfig) -> Result<HolgerInstance> {
     };
 
     // 4. Build RepositoryInstances
-    let mut repositories = Vec::new();
-    for r in &config.repositories {
-        let repo = Arc::new(RepositoryInstance::from_config(
-            r,
-            &resolve_storage,
-            &resolve_endpoint,
-        )?);
-        repositories.push(repo);
-    }
+    // 4. Build repositories and aggregate routes
+    let (repositories, mut endpoint_routes) =
+        aggregate_routes(config, &resolve_storage, &resolve_endpoint)?;
 
-    // 5. Wire up routes: each repo attaches itself to its endpoint
-    for repo in &repositories {
-        if let Some(out_io) = &repo.out_io {
-            let ep_name = &out_io.endpoint.name;
-            if let Some(endpoint_arc) = endpoint_map.get(ep_name) {
-                // We cannot modify through Arc directly without Mutex,
-                // so clone a new instance with updated routes if needed
-                // Or design routes to be RwLock if dynamic routing required.
-                // For now, just log/skip mut insert if immutable
-                // println!("Attaching {} to endpoint {}", repo.name, ep_name);
-            }
-        }
+    // 5. Wire up endpoints with routes
+    for ep in &config.exposed_endpoints {
+        let backend: Arc<Http2Backend> = Http2Backend::from_config(
+            ep.name.clone(),
+            &ep.url_prefix,
+            &ep.cert,
+            &ep.key,
+        )?;
+
+        let backend_arc: Arc<dyn ExposedEndpointBackend> = backend.clone();
+        let (ip, port) = parse_ip_port(&ep.url_prefix);
+
+        // Pull routes for this endpoint
+        let routes = endpoint_routes
+            .remove(&ep.name)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|repo| (repo.name.clone(), repo))
+            .collect();
+
+        let instance = Arc::new(ExposedEndpointInstance {
+            name: ep.name.clone(),
+            ip,
+            port,
+            routes,
+            backend: backend_arc,
+        });
+
+        endpoint_map.insert(ep.name.clone(), instance.clone());
+        exposed_endpoints.push(instance);
     }
 
     Ok(HolgerInstance {
@@ -141,5 +150,34 @@ impl HolgerInstance {
             .try_for_each(|backend| backend.stop())?;
         Ok(())
     }
+}
+
+/// Aggregate repository routes per endpoint name
+fn aggregate_routes(
+    config: &HolgerConfig,
+    resolve_storage: &impl Fn(&str) -> anyhow::Result<Arc<StorageEndpointInstance>>,
+    resolve_endpoint: &impl Fn(&str) -> anyhow::Result<Arc<ExposedEndpointInstance>>,
+) -> anyhow::Result<(Vec<Arc<RepositoryInstance>>, HashMap<String, Vec<Arc<RepositoryInstance>>>)> {
+    let mut repositories = Vec::new();
+    let mut endpoint_routes: HashMap<String, Vec<Arc<RepositoryInstance>>> = HashMap::new();
+
+    for r in &config.repositories {
+        let repo = Arc::new(RepositoryInstance::from_config(
+            r,
+            resolve_storage,
+            resolve_endpoint,
+        )?);
+
+        if let Some(out_io) = &repo.out_io {
+            endpoint_routes
+                .entry(out_io.endpoint.name.clone())
+                .or_default()
+                .push(repo.clone());
+        }
+
+        repositories.push(repo);
+    }
+
+    Ok((repositories, endpoint_routes))
 }
 
