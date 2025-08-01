@@ -46,6 +46,7 @@ out = { storage_backend = "artifact-prod", exposed_endpoint = "prod" }
 
 ## Fan art
 
+<img width="1024" height="1536" alt="462989300-f2b99810-9bc0-4591-85ce-bfad69bc393d" src="https://github.com/user-attachments/assets/cbc60639-0025-4437-a088-c41f8deded2e" />
 
 
 ## Holger serving imutable historized archives
