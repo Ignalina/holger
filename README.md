@@ -2,9 +2,11 @@
 
 **Holger guards your artifacts at rest.**
 
+-->NOTE Holger projekt just started , come back later <--
+
+
 Immutable Rust-based artifact airgaper. Holger ingests language-specific package trees and serves them over standardized APIs, just like Artifactory or Nexus — but with an airgapped, append-only backend called **artifact**, based on Znippy archives.  
 
--->NOTE Holger projekt just started , come back later <--
 
 ## Overview
 
@@ -201,95 +203,22 @@ CFG --> Repositories
 
 ```
 
-```json
-{
-  "exposed_endpoints": [
-    {
-      "name": "main",
-      "url_prefix": "https://holger.example.com/"
-    }
-  ],
-  "storage_endpoints": [
-    {
-      "name": "znippy-local",
-      "type": {
-        "znippy": {
-          "path": "/var/lib/holger/znippy/",
-          "supports_random_read": true
-        }
-      }
-    }
-  ],
-  "repositories": [
-    {
-      "name": "rust-prod",
-      "type": {
-        "rust": {
-          "accept_unpublished": false
-        }
-      },
-      "out": {
-        "storage_backend": "znippy-local",
-        "endpoints": ["main"]
-      }
-    }
-  ]
-}
+Exampe config for small deploy.
+```toml
+[[exposed_endpoints]]
+name = "prod"
+url_prefix = "https://10.101.1.9:8443"
+cert = "holger-core/tests/cert.pem"
+key = "holger-core/tests/key.pem"
 
+[[storage_endpoints]]
+name = "artifact-prod"
+type = "znippy"
+path = "/var/lib/holger/rust-prod/"
+
+[[repositories]]
+name = "rust-prod"
+type = "rust"
+out = { storage_backend = "artifact-prod", exposed_endpoint = "prod" }
 ```
 
-
-```json
-
-{
-  "exposed_endpoints": [
-    {
-      "name": "main",
-      "url_prefix": "https://holger.example.com/"
-    },
-    {
-      "name": "internal",
-      "url_prefix": "http://localhost:8080/"
-    }
-  ],
-  "storage_endpoints": [
-    {
-      "name": "znippy-local",
-      "type": {
-        "znippy": {
-          "path": "/var/lib/holger/znippy/",
-          "supports_random_read": true
-        }
-      }
-    },
-    {
-      "name": "rocks-dev",
-      "type": {
-        "rocksdb": {
-          "path": "/var/lib/holger/rocksdb/",
-          "supports_random_read": false
-        }
-      }
-    }
-  ],
-  "repositories": [
-    {
-      "name": "rust-dev",
-      "type": {
-        "rust": {
-          "accept_unpublished": true
-        }
-      },
-      "in": {
-        "storage_backend": "rocks-dev",
-        "endpoints": ["internal"]
-      },
-      "out": {
-        "storage_backend": "znippy-local",
-        "endpoints": ["main"]
-      },
-      "upstreams": []
-    }
-  ]
-}
-```
