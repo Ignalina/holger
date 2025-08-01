@@ -9,7 +9,7 @@ description = "Holger guards your artifacts at rest. May Allfather Odin watch ov
 license = "MIT"
 repository = "https://github.com/Ignalina/holger"
 readme = "../README.md"
-categories = ["command-line-utilities", "artifacts"]
+categories = ["command-line-utilities","development-tools"]
 keywords = ["znippy", "artifacts", "blake3", "cli","airgap"]
 
 
