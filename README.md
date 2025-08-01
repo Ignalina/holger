@@ -24,9 +24,31 @@ These folders are archived into a `.znippy` file by the Znippy CLI. The resultin
 
 The Holger service reads this `.znippy` archive and exposes one virtual API endpoint per language. Internally, the `.znippy` file is parsed into one Arrow-based table per language, collectively called an `.artifact` file. Holger uses this file to respond to requests from tools like Cargo, pip, Maven and Go.
 
-## Holger Serving Modes
+## Exampe config for small deploy.
 
-All `.artifact` files are immutable. However, Holger can optionally be configured to allow **live ingest** of artifacts not found in the current `.artifact`. This is primarily useful in DEV environments.
+```toml
+[[exposed_endpoints]]
+name = "prod"
+url_prefix = "https://10.101.1.9:8443"
+cert = "holger-core/tests/cert.pem"
+key = "holger-core/tests/key.pem"
+
+[[storage_endpoints]]
+name = "artifact-prod"
+type = "znippy"
+path = "/var/lib/holger/rust-prod/"
+
+[[repositories]]
+name = "rust-prod"
+type = "rust"
+out = { storage_backend = "artifact-prod", exposed_endpoint = "prod" }
+```
+
+
+
+## Holger serving imutable historized archives
+
+All `.artifact` files are immutable. However, Holger can(will be) optionally be configured to allow **live ingest** of artifacts not found in the current `.artifact`. This is primarily useful in DEV environments.
 
 | History | Source                   | Update Capability         | Use Case                           |
 | ---- | ------------------------ | ------------------------- | ---------------------------------- |
@@ -201,24 +223,5 @@ Artifact --> Merge
 DepGraph --> Promote
 CFG --> Repositories
 
-```
-
-Exampe config for small deploy.
-```toml
-[[exposed_endpoints]]
-name = "prod"
-url_prefix = "https://10.101.1.9:8443"
-cert = "holger-core/tests/cert.pem"
-key = "holger-core/tests/key.pem"
-
-[[storage_endpoints]]
-name = "artifact-prod"
-type = "znippy"
-path = "/var/lib/holger/rust-prod/"
-
-[[repositories]]
-name = "rust-prod"
-type = "rust"
-out = { storage_backend = "artifact-prod", exposed_endpoint = "prod" }
 ```
 
