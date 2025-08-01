@@ -1,5 +1,6 @@
 
 
 [workspace]
-members = ["holger-core"]
+members = ["holger-core","holger"]
+
 resolver = "2"
