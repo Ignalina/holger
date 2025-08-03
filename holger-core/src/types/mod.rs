@@ -39,6 +39,16 @@ pub enum RepositoryType {
     Maven3,
     Raw,
 }
+impl RepositoryType {
+    pub fn endpoint_name(&self) -> &'static str {
+        match self {
+            RepositoryType::Rust => "rust",
+            RepositoryType::Pip => "pip",
+            RepositoryType::Maven3 => "maven3",
+            RepositoryType::Raw => "raw",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExposedEndpoint {
@@ -53,6 +63,8 @@ pub struct InOut {
     pub storage_backend: String,
     pub exposed_endpoint: String,
 }
+
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Repository {

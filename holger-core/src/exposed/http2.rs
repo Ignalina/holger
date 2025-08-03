@@ -22,10 +22,85 @@ use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::Full;
 use hyper::{Request, Response, StatusCode};
-use crate::{RepositoryBackend, StorageEndpointInstance};
+use crate::{config, RepositoryBackend, StorageEndpointInstance};
 use crate::repository::rust::RustRepo;
 use super::ExposedEndpointBackend;
 use std::any::Any;
+
+
+
+
+#[derive(Clone)]
+pub struct FastRoute {
+    pub name: String,
+    // todo make Option
+    pub backend: Arc<dyn RepositoryBackend>,
+}
+
+pub struct FastRoutes {
+    pub routes: Vec<FastRoute>,
+    pub first_byte_index: [usize; 256],
+    pub first_byte_len: [usize; 256],
+}
+
+impl FastRoutes {
+    pub fn new(routes: Vec<(String, Arc<dyn RepositoryBackend>)>) -> Self {
+        let mut routes_vec: Vec<FastRoute> = routes
+            .into_iter()
+            .map(|(name, backend)| FastRoute { name, backend })
+            .collect();
+
+        // Sort by first byte then length
+        routes_vec.sort_by(|a, b| {
+            let fa = a.name.as_bytes().first().copied().unwrap_or(0);
+            let fb = b.name.as_bytes().first().copied().unwrap_or(0);
+            fa.cmp(&fb).then(a.name.len().cmp(&b.name.len()))
+        });
+
+        let mut first_byte_index = [0usize; 256];
+        let mut first_byte_len = [0usize; 256];
+
+        // Build lookup table
+        let mut i = 0usize;
+        while i < routes_vec.len() {
+            let byte = routes_vec[i].name.as_bytes().first().copied().unwrap_or(0);
+            let start = i;
+            while i < routes_vec.len()
+                && routes_vec[i].name.as_bytes().first().copied().unwrap_or(0) == byte
+            {
+                i += 1;
+            }
+            first_byte_index[byte as usize] = start;
+            first_byte_len[byte as usize] = i - start;
+        }
+
+        Self {
+            routes: routes_vec,
+            first_byte_index,
+            first_byte_len,
+        }
+    }
+
+    pub fn lookup(&self, name: &str) -> Option<&Arc<dyn RepositoryBackend>> {
+        let bytes = name.as_bytes();
+        let first = bytes.first().copied().unwrap_or(0) as usize;
+
+        let start = self.first_byte_index[first];
+        let len = self.first_byte_len[first];
+        if len == 0 {
+            return None;
+        }
+
+        let bucket = &self.routes[start..start + len];
+        for r in bucket {
+            if r.name == name {
+                return Some(&r.backend);
+            }
+        }
+        None
+    }
+}
+
 /// HTTP2 backend holding routing to repository backends
 pub struct Http2Backend {
     pub  name: String,
@@ -33,13 +108,10 @@ pub struct Http2Backend {
     pub port: u16,
     pub tls_config: Arc<ServerConfig>,
     pub running: Arc<AtomicBool>,
-    pub routes: HashMap<String, Arc<dyn RepositoryBackend>>,
-
-
+    pub fast_routes: Option<FastRoutes>,
 }
 
 impl Http2Backend {
-
     /// Register a repository backend to a sub-URL
     pub fn new(name: String, listener_addr: String, port: u16,tls_config: Arc<ServerConfig>) -> Self {
         Self {
@@ -48,8 +120,14 @@ impl Http2Backend {
             port,
             tls_config,
             running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            routes:  HashMap::new(),
+            fast_routes: None,
         }
+    }
+    /// Inject FastRoutes after construction (2‑pass wiring)
+
+
+    fn set_fast_routes(&mut self, routes: FastRoutes) {
+        self.fast_routes = Some(routes);
     }
 
     pub fn from_config(
@@ -57,23 +135,25 @@ impl Http2Backend {
         url_prefix: &str,
         cert_path: &str,
         key_path: &str,
-    ) -> anyhow::Result<Arc<Self>> {
-        // Parse host and port from the URL
-        let (host, port) = Self::parse_ip_port(url_prefix);
+    ) -> anyhow::Result<Self> {
+        let (host, port) = config::parse_ip_port(&url_prefix);
+        let tls_config = Arc::new(load_tls_config(cert_path, key_path)?);
+
         let tls_config = Arc::new(load_tls_config(cert_path, key_path)?);
 
         // Compose listener address like "host:port"
         let listener_addr = format!("{}:{}", host, port);
 
-        Ok(Arc::new(Http2Backend::new(
-            name.into(),
+        Ok(Self {
+            name: name.into(),
             listener_addr,
             port,
             tls_config,
-        )))
+            running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            fast_routes: None,
+        })
     }
-
-    fn parse_ip_port(url: &str) -> (String, u16) {
+    pub(crate) fn parse_ip_port(url: &str) -> (String, u16) {
         let clean = url.trim_end_matches('/');
         let without_scheme = clean.split("://").nth(1).unwrap_or(clean);
         let mut parts = without_scheme.split(':');
@@ -81,6 +161,9 @@ impl Http2Backend {
         let port = parts.next().and_then(|p| p.parse().ok()).unwrap_or(443);
         (ip, port)
     }
+
+
+
 
     /// ✅ Now takes &self, safe to call from factory
     /// Start serving requests asynchronously (spawns a background task)
@@ -134,14 +217,19 @@ impl Http2Backend {
     }
 
 
+
+
 }
 
 #[async_trait::async_trait]
 impl ExposedEndpointBackend for Http2Backend {
+
     fn name(&self) -> &str {
         &self.name
     }
-
+    fn set_fast_routes(&mut self, routes: FastRoutes) {
+        self.fast_routes = Some(routes);
+    }
     async fn handle_request(
         &self,
         req: Request<Body>,
@@ -152,16 +240,25 @@ impl ExposedEndpointBackend for Http2Backend {
         let body_bytes = req.into_body().collect().await?.to_bytes();
         let body_vec = body_bytes.to_vec();
 
-        // Use the real routes HashMap
+
+
+
+
         let repo_key = suburl.split('/').next().unwrap_or("");
-        if let Some(repo) = self.routes.get(repo_key) {
+        if let Some(repo) = self.fast_routes.as_ref().and_then(|routes| routes.lookup(repo_key)) {
+
+
             let suburl_owned = suburl.to_string();
+            let body_owned = body_vec;
+
             let result = tokio::task::spawn_blocking({
-                let repo = Arc::clone(repo);
-                move || repo.handle_http2_request(&suburl_owned, &body_vec)
+                let repo_arc = Arc::clone(repo);
+                move || repo_arc.handle_http2_request(&suburl_owned, &body_owned)
             })
                 .await
                 .unwrap();
+
+
 
             match result {
                 Ok((status, headers, data)) => {

@@ -7,7 +7,22 @@ use crate::{ArtifactFormat, ArtifactId, StorageEndpointInstance};
 pub struct RustRepo {
     pub name: String,
     pub in_backend: Option<StorageEndpointInstance>,
-    pub out_backend: StorageEndpointInstance,
+// todo make option
+    pub out_backend: Option<StorageEndpointInstance>,
+}
+
+impl RustRepo {
+    pub fn new(name: String) -> Self {
+        RustRepo {
+
+            // initialize fields if any; if none, leave empty struct
+            // Example: name
+            // name,
+            name,
+            in_backend: None,
+            out_backend: None,
+        }
+    }
 }
 
 impl RepositoryBackend for RustRepo {

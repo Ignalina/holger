@@ -7,7 +7,8 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 use derivative::Derivative;
-use crate::RepositoryInstance;
+use crate::exposed::http2::{FastRoutes, Http2Backend};
+use crate::{ExposedEndpoint, RepositoryInstance};
 
 pub mod http2;
 
@@ -17,28 +18,43 @@ pub struct ExposedEndpointInstance {
     pub name: String,
     pub ip: String,
     pub port: u16,
-    pub routes: HashMap<String, Arc<RepositoryInstance>>,
     #[derivative(Debug = "ignore")]
-    pub backend: Arc<dyn ExposedEndpointBackend>,
+    pub backend: Option<Arc<dyn ExposedEndpointBackend>>,
+    #[derivative(Debug = "ignore")]
+    pub fast_routes: Option<FastRoutes>
 }
+
 
 impl ExposedEndpointInstance {
     pub fn new(
         name: impl Into<String>,
         ip: impl Into<String>,
         port: u16,
-        backend: Arc<dyn ExposedEndpointBackend>,
-        routes: HashMap<String, Arc<RepositoryInstance>>,
+        backend: Option<Arc<dyn ExposedEndpointBackend>>,
+//        routes: HashMap<String, Arc<RepositoryInstance>>,
     ) -> Self {
         ExposedEndpointInstance {
             name: name.into(),
             ip: ip.into(),
             port,
-            routes,
             backend,
+            fast_routes: None
         }
     }
+    pub fn from_config(cfg: &ExposedEndpoint) -> anyhow::Result<Self> {
+        let (ip, port) = Http2Backend::parse_ip_port(&cfg.url_prefix);
+        Ok(Self::new(cfg.name.clone(), ip.clone(), port,None))
+    }
+    pub fn set_fast_routes(&mut self, routes: FastRoutes) {
+        self.fast_routes = Some(routes);
+    }
+
+    /// Optionally set backend in the second pass
+    pub fn set_backend(&mut self, backend: Arc<dyn ExposedEndpointBackend>) {
+        self.backend = Some(backend);
+    }
 }
+
 
 
 #[async_trait]
@@ -58,5 +74,5 @@ pub trait ExposedEndpointBackend: Send + Sync {
 
     /// Stop the backend and block until stopped
     fn stop(&self) -> anyhow::Result<()>;
-
+    fn set_fast_routes(&mut self, routes: FastRoutes);
 }
