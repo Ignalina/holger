@@ -194,8 +194,13 @@ pub trait RepositoryBackend: Send + Sync {
 
 
 impl RepositoryInstance {
-    /// Pass 1: build skeleton with empty I/O and optional upstream names
-    pub fn from_config(cfg: &Repository) -> anyhow::Result<Self> {
+    pub fn exposed_endpoint_name(&self) -> &str {
+        self.out_io
+            .as_ref()
+            .and_then(|io| io.exposed.as_ref()) // Option<&ExposedEndpointInstance>
+            .map(|exposed| exposed.name.as_str())
+            .unwrap_or("")
+    }    pub fn from_config(cfg: &Repository) -> anyhow::Result<Self> {
         let format = match cfg.ty {
             RepositoryType::Maven3 => ArtifactFormat::Maven3,
             RepositoryType::Pip => ArtifactFormat::Pip,
@@ -251,5 +256,8 @@ impl RepositoryInstance {
         });
 
         Ok(())
+    }
+    pub fn backend(&self) -> Option<Arc<dyn RepositoryBackend>> {
+        self.backend.clone()
     }
 }

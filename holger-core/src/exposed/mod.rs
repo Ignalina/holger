@@ -1,16 +1,18 @@
 use async_trait::async_trait;
 use bytes::Bytes;
-use hyper::{Request, Response, body::Incoming as Body};
+use hyper::{body::Incoming as Body, Request, Response};
 use http_body_util::combinators::BoxBody;
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 use derivative::Derivative;
-use crate::exposed::http2::{FastRoutes, Http2Backend};
-use crate::{ExposedEndpoint, RepositoryInstance};
+use fast_routes::FastRoutes;
+use crate::config::parse_ip_port;
+use crate::exposed::http2::Http2Backend;
+use crate::ExposedEndpoint;
 
 pub mod http2;
+pub mod fast_routes;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -43,16 +45,41 @@ impl ExposedEndpointInstance {
     }
     pub fn from_config(cfg: &ExposedEndpoint) -> anyhow::Result<Self> {
         let (ip, port) = Http2Backend::parse_ip_port(&cfg.url_prefix);
-        Ok(Self::new(cfg.name.clone(), ip.clone(), port,None))
+
+        let backend: Arc<Http2Backend> = Arc::new( Http2Backend::from_config(
+            cfg.name.clone(),
+            &cfg.url_prefix,
+            &cfg.cert,
+            &cfg.key,
+        )?);
+
+        // Cast to Arc<dyn ExposedEndpointBackend>
+        let backend_arc: Arc<dyn ExposedEndpointBackend> = backend.clone();
+        Ok(Self::new(cfg.name.clone(), ip, port,Some(backend_arc)))
     }
     pub fn set_fast_routes(&mut self, routes: FastRoutes) {
-        self.fast_routes = Some(routes);
-    }
+        // Keep a copy internally
+        self.fast_routes = Some(routes.clone());
 
+        // Cascade to backend if unique Arc
+        if let Some(backend_arc) = &mut self.backend {
+            // If this Arc is uniquely owned, we can mutate the backend directly
+            if let Some(backend_mut) = Arc::get_mut(backend_arc) {
+                backend_mut.set_fast_routes(routes);
+            } else {
+                log::warn!(
+                    "ExposedEndpointInstance '{}' backend Arc is shared; \
+                     cannot directly set fast routes on backend",
+                    self.name
+                );
+            }
+        }
+    }
     /// Optionally set backend in the second pass
     pub fn set_backend(&mut self, backend: Arc<dyn ExposedEndpointBackend>) {
         self.backend = Some(backend);
     }
+ 
 }
 
 

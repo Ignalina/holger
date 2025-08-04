@@ -1,106 +1,28 @@
 use http_body_util::BodyExt;
 use std::{
     fs::File,
-    io::{BufReader, Result as IoResult},
+    io::BufReader,
     path::Path,
 };
 
-use anyhow::{Context};
+use anyhow::Context;
 use hyper::{
     body::Incoming as Body,
     service::service_fn,
 };
-use rustls_pemfile::{certs, rsa_private_keys};
+use rustls_pemfile::certs;
 use tokio::net::TcpListener;
-use tokio_rustls::{TlsAcceptor, TlsStream};
-use tokio_rustls::rustls::{ServerConfig, pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer}};
+use tokio_rustls::TlsAcceptor;
+use tokio_rustls::rustls::{pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer}, ServerConfig};
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use anyhow::Result;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::Full;
 use hyper::{Request, Response, StatusCode};
-use crate::{config, RepositoryBackend, StorageEndpointInstance};
-use crate::repository::rust::RustRepo;
+use crate::{config, RepositoryBackend};
 use super::ExposedEndpointBackend;
-use std::any::Any;
-
-
-
-
-#[derive(Clone)]
-pub struct FastRoute {
-    pub name: String,
-    // todo make Option
-    pub backend: Arc<dyn RepositoryBackend>,
-}
-
-pub struct FastRoutes {
-    pub routes: Vec<FastRoute>,
-    pub first_byte_index: [usize; 256],
-    pub first_byte_len: [usize; 256],
-}
-
-impl FastRoutes {
-    pub fn new(routes: Vec<(String, Arc<dyn RepositoryBackend>)>) -> Self {
-        let mut routes_vec: Vec<FastRoute> = routes
-            .into_iter()
-            .map(|(name, backend)| FastRoute { name, backend })
-            .collect();
-
-        // Sort by first byte then length
-        routes_vec.sort_by(|a, b| {
-            let fa = a.name.as_bytes().first().copied().unwrap_or(0);
-            let fb = b.name.as_bytes().first().copied().unwrap_or(0);
-            fa.cmp(&fb).then(a.name.len().cmp(&b.name.len()))
-        });
-
-        let mut first_byte_index = [0usize; 256];
-        let mut first_byte_len = [0usize; 256];
-
-        // Build lookup table
-        let mut i = 0usize;
-        while i < routes_vec.len() {
-            let byte = routes_vec[i].name.as_bytes().first().copied().unwrap_or(0);
-            let start = i;
-            while i < routes_vec.len()
-                && routes_vec[i].name.as_bytes().first().copied().unwrap_or(0) == byte
-            {
-                i += 1;
-            }
-            first_byte_index[byte as usize] = start;
-            first_byte_len[byte as usize] = i - start;
-        }
-
-        Self {
-            routes: routes_vec,
-            first_byte_index,
-            first_byte_len,
-        }
-    }
-
-    pub fn lookup(&self, name: &str) -> Option<&Arc<dyn RepositoryBackend>> {
-        let bytes = name.as_bytes();
-        let first = bytes.first().copied().unwrap_or(0) as usize;
-
-        let start = self.first_byte_index[first];
-        let len = self.first_byte_len[first];
-        if len == 0 {
-            return None;
-        }
-
-        let bucket = &self.routes[start..start + len];
-        for r in bucket {
-            if r.name == name {
-                return Some(&r.backend);
-            }
-        }
-        None
-    }
-}
-
 /// HTTP2 backend holding routing to repository backends
 pub struct Http2Backend {
     pub  name: String,
@@ -245,7 +167,9 @@ impl ExposedEndpointBackend for Http2Backend {
 
 
         let repo_key = suburl.split('/').next().unwrap_or("");
+        println!("Repo key: {}", repo_key);
         if let Some(repo) = self.fast_routes.as_ref().and_then(|routes| routes.lookup(repo_key)) {
+            println!("routing to repo.name={}", repo.name());
 
 
             let suburl_owned = suburl.to_string();
@@ -257,9 +181,7 @@ impl ExposedEndpointBackend for Http2Backend {
             })
                 .await
                 .unwrap();
-
-
-
+            
             match result {
                 Ok((status, headers, data)) => {
                     let mut response = Response::builder()
@@ -331,7 +253,7 @@ fn load_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
 }
 
 
-use rustls_pemfile::{Item, read_all};
+use rustls_pemfile::{read_all, Item};
 use tokio_rustls::rustls::pki_types::{PrivatePkcs8KeyDer, PrivateSec1KeyDer};
 
 fn load_key(path: &Path) -> Result<PrivateKeyDer<'static>> {
@@ -369,13 +291,11 @@ fn load_key(path: &Path) -> Result<PrivateKeyDer<'static>> {
 
 
  */
-use std::sync::{ atomic::{AtomicBool, Ordering}};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::task::JoinHandle;
 use hyper::server::conn::http2;
 use hyper_util::rt::TokioIo;
-
-
-
+use crate::exposed::fast_routes::FastRoutes;
 /*
 
 

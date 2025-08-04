@@ -16,11 +16,11 @@ keywords = ["znippy", "artifacts", "blake3", "cli","airgap"]
 [dependencies]
 
 futures-util = { version = "0.3", default-features = false }
-hyper = { version = "1.6", features = ["full"] }
-tokio = { version = "1.47", features = ["full"] }
+hyper = { version = "1.6.0", features = ["full"] }
+tokio = { version = "1.47.1", features = ["full"] }
 
 serde = { version = "1.0.219", features = ["derive"] }
-toml = "0.9.2"
+toml = "0.9.4"
 bytes = "1.10.1"
 anyhow = "1.0.98"
 
@@ -37,3 +37,4 @@ async-trait = "0.1.88"
 futures = "0.3.31"
 url = "2.5.4"
 ctrlc = "3.4.7"
+log = "0.4.27"

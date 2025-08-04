@@ -1,61 +1,64 @@
-use crate::repository::rust::RustRepo;
-use crate::repository::types::IOInstance;
 use std::fs;
-use std::path::{Path, PathBuf};
-use anyhow::Context;
+use std::path::Path;
 use crate::exposed::{ExposedEndpointBackend, ExposedEndpointInstance};
-use url::Url;
-use crate::{
-    ArtifactFormat, HolgerConfig, RepositoryInstance, RepositoryBackend, StorageEndpointInstance,
-    RepositoryType, StorageType,
-};
+use crate::{HolgerConfig, RepositoryBackend, RepositoryInstance, StorageEndpointInstance};
 use std::collections::HashMap;
 use std::sync::Arc;
-use anyhow::{anyhow, Result};
-use rustls::ServerConfig;
-use crate::exposed::http2::{FastRoutes, Http2Backend};
+use anyhow::Result;
+use crate::exposed::fast_routes::FastRoutes;
 
-
-use std::sync::atomic::AtomicBool;
-use crate::{ExposedEndpoint, StorageEndpoint};
 
 
 pub fn factory(config: &HolgerConfig) -> Result<HolgerInstance> {
-    use std::collections::HashMap;
-    use std::sync::Arc;
+    // 1. Storage endpoints
+    let storage_endpoints: Vec<StorageEndpointInstance> = config
+        .storage_endpoints
+        .iter()
+        .map(|se| StorageEndpointInstance::from_config(se))
+        .collect::<Result<_, _>>()?;
 
-    // 1. Build StorageEndpointInstances
-    let mut storage_map: HashMap<String, Arc<StorageEndpointInstance>> = HashMap::new();
-    let mut storage_endpoints = Vec::new();
+    // 2. Exposed endpoints
+    let mut exposed_endpoints: Vec<ExposedEndpointInstance> = config
+        .exposed_endpoints
+        .iter()
+        .map(|ee| ExposedEndpointInstance::from_config(ee))
+        .collect::<Result<_, _>>()?;
 
-    for se in &config.storage_endpoints {
-        let instance = Arc::new(StorageEndpointInstance::from_config(se)?);
-        storage_map.insert(se.name.clone(), instance.clone());
-        storage_endpoints.push(instance);
+    // 3. Repository instances
+    let repositories: Vec<RepositoryInstance> = config
+        .repositories
+        .iter()
+        .map(|repo_cfg| RepositoryInstance::from_config(repo_cfg))
+        .collect::<Result<_, _>>()?;
+
+    // 3b. WIRE: Link RepositoryInstances -> ExposedEndpointInstances
+    let mut repositories = repositories; // make mutable
+    for repo in &mut repositories {
+        if let Some(io) = repo.out_io.as_mut() {
+            if let Some(name) = &io.exposed_name {
+                if let Some(endpoint) = exposed_endpoints.iter().find(|ep| ep.name == *name) {
+                    io.exposed = Some(endpoint.clone());
+                }
+            }
+        }
     }
+    // 4. Build FastRoutes for each exposed endpoint
+    for endpoint in &mut exposed_endpoints {
+        let routes: Vec<(String, Arc<dyn RepositoryBackend>)> = repositories
+            .iter()
+            .filter_map(|repo| {
+                let name= repo.exposed_endpoint_name();
+                println!("LHS={:?}, RHS={:?}", name, endpoint.name);
+                if name == endpoint.name {
+                    repo.backend()
+                        .map(|backend| (repo.name.clone(), backend))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-    // 2. Build ExposedEndpointInstances
-    let mut endpoint_map: HashMap<String, Arc<ExposedEndpointInstance>> = HashMap::new();
-    let mut exposed_endpoints = Vec::new();
-
-    for ee in &config.exposed_endpoints {
-        let instance = Arc::new(ExposedEndpointInstance::from_config(ee)?);
-        endpoint_map.insert(ee.name.clone(), instance.clone());
-        exposed_endpoints.push(instance);
-    }
-
-    // 3. Pass 1: Instantiate repositories
-    let mut repositories: Vec<Arc<RepositoryInstance>> = Vec::new();
-    for repo_cfg in &config.repositories {
-        let repo = Arc::new(RepositoryInstance::from_config(repo_cfg)?);
-        repositories.push(repo);
-    }
-
-    // 4. Pass 2: Wire repositories to storage/endpoints
-    for (i, repo_cfg) in config.repositories.iter().enumerate() {
-        let mut_repo = Arc::get_mut(&mut repositories[i])
-            .expect("Factory: repo Arc should be unique at this point");
-        mut_repo.wire(repo_cfg, &storage_map, &endpoint_map)?;
+        endpoint.set_fast_routes(FastRoutes::new(routes));
     }
 
     Ok(HolgerInstance {
@@ -66,30 +69,19 @@ pub fn factory(config: &HolgerConfig) -> Result<HolgerInstance> {
 }
 
 
-/// Inline helper to parse IP + port from URL
-pub(crate) fn parse_ip_port(url: &str) -> (String, u16) {
-    let clean = url.trim_end_matches('/');
-    let without_scheme = clean.split("://").nth(1).unwrap_or(clean);
-    let mut parts = without_scheme.split(':');
-    let ip = parts.next().unwrap_or("127.0.0.1").to_string();
-    let port = parts.next().and_then(|p| p.parse().ok()).unwrap_or(443);
-    (ip, port)
-}
-
-
 
 pub fn load_config_from_path<P: AsRef<Path>>(path: P) -> Result<HolgerConfig> {
     let data = fs::read_to_string(path)?;
     let config: HolgerConfig = toml::from_str(&data)?;
     Ok(config)
 }
+
 #[derive(Debug)]
 pub struct HolgerInstance {
-    pub exposed_endpoints: Vec<Arc<ExposedEndpointInstance>>,
-    pub storage_endpoints: Vec<Arc<StorageEndpointInstance>>,
-    pub repositories: Vec<Arc<RepositoryInstance>>,
+    pub exposed_endpoints: Vec<ExposedEndpointInstance>,
+    pub storage_endpoints: Vec<StorageEndpointInstance>,
+    pub repositories: Vec<RepositoryInstance>,
 }
-
 impl HolgerInstance {
     pub fn start(&self) -> anyhow::Result<()> {
         self.exposed_endpoints
@@ -106,5 +98,16 @@ impl HolgerInstance {
             .try_for_each(|backend| backend.stop())?;
         Ok(())
     }
+
+
+}
+
+pub(crate) fn parse_ip_port(url: &str) -> (String, u16) {
+    let clean = url.trim_end_matches('/');
+    let without_scheme = clean.split("://").nth(1).unwrap_or(clean);
+    let mut parts = without_scheme.split(':');
+    let ip = parts.next().unwrap_or("127.0.0.1").to_string();
+    let port = parts.next().and_then(|p| p.parse().ok()).unwrap_or(443);
+    (ip, port)
 }
 
