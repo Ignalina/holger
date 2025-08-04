@@ -11,5 +11,4 @@ categories = ["command-line-utilities","development-tools"]
 keywords = ["znippy", "artifacts", "blake3", "cli","airgap"]
 
 [dependencies]
-holger-cli = "0.0.1"
-
+holger-cli = {path="../holger-cli"}

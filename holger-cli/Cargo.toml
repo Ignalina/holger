@@ -13,6 +13,6 @@ keywords = ["znippy", "zstd", "parallel", "arrow", "blake3"]
 [dependencies]
 clap = { version = "4.5.41", features = ["derive"] }
 anyhow = "1.0.98"
-holger-core = "0.0.1"
+holger-core = {path="../holger-core"}
 env_logger = "0.11.8"
 ctrlc = "3.4.7"
