@@ -6,6 +6,7 @@ use ron::ser::{to_string_pretty, PrettyConfig};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use anyhow::Result;
+use holger_ron::{wire_holger, Holger};
 //use holger_core::config::factory;
 //use holger_core::load_config_from_path;
 
@@ -36,8 +37,9 @@ pub fn run() -> Result<()> {
         Commands::Start { config} => {
             println!("Starting Holger {:?}",config);
 
-            let holger = holger_ron::read_ron_config(config)?;
-
+            let mut holger = holger_ron::read_ron_config(config)?;
+            let r=wire_holger(&mut holger);
+            print_wiring_summary(&holger);
             let cfg = PrettyConfig::new()
                 .depth_limit(4)
                 .separate_tuple_members(true)
@@ -68,4 +70,38 @@ pub fn run() -> Result<()> {
 }
 fn main() {
     run().unwrap();
+}
+
+pub fn print_wiring_summary(holger: &Holger) {
+    println!("--- Wiring Summary ---");
+
+    for (i, repo) in holger.repositories.iter().enumerate() {
+        let upstreams = repo.ron_upstreams.len();
+        let in_exists = repo.ron_in.is_some();
+        let out_exists = repo.ron_out.is_some();
+
+        println!(
+            "[Repo #{i}] {} | upstreams:{} in:{} out:{}",
+            repo.ron_name, upstreams, in_exists, out_exists
+        );
+    }
+
+    println!("--- Wiring Check ---");
+    let mut ok = true;
+    for repo in &holger.repositories {
+        if repo.ron_out.is_some() && holger.exposed_endpoints.is_empty() {
+            println!("!! Repo {} has `ron_out` but no exposed endpoints wired", repo.ron_name);
+            ok = false;
+        }
+        if repo.ron_out.is_some() && holger.storage_endpoints.is_empty() {
+            println!("!! Repo {} has `ron_out` but no storage endpoints wired", repo.ron_name);
+            ok = false;
+        }
+    }
+
+    if ok {
+        println!("Wiring looks OK.");
+    } else {
+        println!("Wiring has issues.");
+    }
 }
