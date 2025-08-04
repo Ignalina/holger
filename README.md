@@ -24,9 +24,13 @@ These folders are archived into a `.znippy` file by the Znippy CLI. The resultin
 
 The Holger service reads this `.znippy` archive and exposes one virtual API endpoint per language. Internally, the `.znippy` file is parsed into one Arrow-based table per language, collectively called an `.artifact` file. Holger uses this file to respond to requests from tools like Cargo, pip, Maven and Go.
 
-## Exampe config for small deploy.
+
+## Exampe toml config for small deploy.
 
 ```toml
+# NOTE **TOML can’t represent Holger’s graph topology. RON can.**
+## TOML is dead here. Long live RON.
+
 [[exposed_endpoints]]
 name = "prod"
 url_prefix = "https://10.101.1.9:8443"
