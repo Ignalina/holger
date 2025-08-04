@@ -67,28 +67,36 @@ pub struct Repository {
     pub ron_out: Option<RepositoryIO>,
 
     // Wired in second pass
-    #[serde(skip)]
+    #[serde(skip_serializing, skip_deserializing)]
     pub wired_backend: Option<Box<dyn RepositoryBackendTrait>>,
-    #[serde(skip)]
+
+    #[serde(skip_serializing, skip_deserializing)]
     pub wired_upstreams: Vec<*const Repository>, // or &Repository pinned after build
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct RepositoryIO {
-    pub ron_storage_backend: String,
+    pub ron_storage_endpoint: String,
     pub ron_exposed_endpoint: String,
-    #[serde(skip)]
-    pub wired_storage_backend: Option<Box<dyn StorageEndpointBackendTrait>>,
-    #[serde(skip)]
-    pub wired_exposed_endpoint: Option<Box<dyn ExposedEndpointBackendTrait>>,
+
+
+    #[serde(skip_serializing, skip_deserializing, default = "std::ptr::null")]
+    pub wired_storage: *const StorageEndpoint,
+    #[serde(skip_serializing, skip_deserializing, default = "std::ptr::null")]
+    pub wired_exposed: *const ExposedEndpoint,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ExposedEndpoint {
     pub ron_name: String,
     pub ron_url: String, // Parsed internally to ip/port
-    #[serde(skip)]
-    pub wired_backend: Option<Box<dyn ExposedEndpointBackendTrait>>,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub backend_http2: Option<Box<dyn ExposedEndpoint_http2_Trait>>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub wired_in_repositories: Vec<*const Repository>,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub wired_out_repositories: Vec<*const Repository>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -96,8 +104,14 @@ pub struct StorageEndpoint {
     pub ron_name: String,
     pub ron_storage_type: String, // "znippy" | "rocksdb"
     pub ron_path: String,
-    #[serde(skip)]
-    pub wired_backend: Option<Box<dyn StorageEndpointBackendTrait>>,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub backend_raf: Option<Box<dyn StorageEndpoint_raf_Trait>>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub wired_in_repositories: Vec<*const Repository>,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub wired_out_repositories: Vec<*const Repository>,
+
 }
 
 // ========================= TRAITS =========================
@@ -121,7 +135,7 @@ pub trait RepositoryBackendTrait: Send + Sync {
 }
 
 #[async_trait]
-pub trait ExposedEndpointBackendTrait: Send + Sync {
+pub trait ExposedEndpoint_http2_Trait: Send + Sync {
     fn name(&self) -> &str;
 
     fn start(&self) -> Result<()>;
@@ -139,7 +153,7 @@ pub trait ExposedEndpointBackendTrait: Send + Sync {
     fn set_fast_routes(&mut self, routes: FastRoutes);
 }
 
-pub trait StorageEndpointBackendTrait: Send + Sync {
+pub trait StorageEndpoint_raf_Trait: Send + Sync {
     fn name(&self) -> &str;
 
     fn start(&self) -> Result<()>;

@@ -21,7 +21,7 @@
             ron_upstreams: [],
             ron_in: None,
             ron_out: Some((
-                ron_storage_backend: "artifact-prod",
+                ron_storage_endpoint: "artifact-prod",
                 ron_exposed_endpoint: "prod",
             )),
         ),
