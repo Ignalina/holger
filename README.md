@@ -48,6 +48,39 @@ out = { storage_backend = "artifact-prod", exposed_endpoint = "prod" }
 
 <img width="1024" height="1536" alt="462989300-f2b99810-9bc0-4591-85ce-bfad69bc393d" src="https://github.com/user-attachments/assets/cbc60639-0025-4437-a088-c41f8deded2e" />
 
+## curent state source code
+```mermaid
+graph TD
+
+subgraph Core
+    HolgerInstance["HolgerInstance"]
+end
+
+subgraph Endpoints
+    ExposedEndpointInstance["ExposedEndpointInstance"]
+end
+
+subgraph Storage
+    StorageEndpointInstance["StorageEndpointInstance"]
+end
+
+subgraph Repositories
+    RepositoryInstance["RepositoryInstance"]
+end
+
+%% --- Wiring HolgerInstance ---
+HolgerInstance --> ExposedEndpointInstance
+HolgerInstance --> StorageEndpointInstance
+HolgerInstance --> RepositoryInstance
+
+%% --- Repository Connections ---
+RepositoryInstance -->|reads from| StorageEndpointInstance
+RepositoryInstance -->|uses| ExposedEndpointInstance
+
+%% --- Endpoint Mappings ---
+ExposedEndpointInstance -->|maps to| RepositoryInstance
+```
+
 
 ## Holger serving imutable historized archives
 
