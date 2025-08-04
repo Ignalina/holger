@@ -200,7 +200,8 @@ impl RepositoryInstance {
             .and_then(|io| io.exposed.as_ref()) // Option<&ExposedEndpointInstance>
             .map(|exposed| exposed.name.as_str())
             .unwrap_or("")
-    }    pub fn from_config(cfg: &Repository) -> anyhow::Result<Self> {
+    }
+    pub fn from_config(cfg: &Repository) -> anyhow::Result<Self> {
         let format = match cfg.ty {
             RepositoryType::Maven3 => ArtifactFormat::Maven3,
             RepositoryType::Pip => ArtifactFormat::Pip,
@@ -220,35 +221,96 @@ impl RepositoryInstance {
     }
 
     /// Pass 2: wire storage + endpoints
+    /*
+        pub fn wire(
+            &mut self,
+            cfg: &Repository,
+            storage_map: &HashMap<String, Arc<StorageEndpointInstance>>,
+            endpoint_map: &HashMap<String, Arc<ExposedEndpointInstance>>,
+        ) -> anyhow::Result<()> {
+            // --- Wire IN
+            self.in_io = cfg.r#in.as_ref().map(|in_cfg| {
+                let storage = storage_map.get(&in_cfg.storage_backend)
+                    .cloned()
+                    .ok_or_else(|| anyhow::anyhow!("Storage endpoint '{}' not found", in_cfg.storage_backend))?;
+                let exposed = endpoint_map.get(&in_cfg.exposed_endpoint)
+                    .cloned()
+                    .ok_or_else(|| anyhow::anyhow!("Exposed endpoint '{}' not found", in_cfg.exposed_endpoint))?;
+                Ok::<IOInstance, anyhow::Error>(IOInstance { storage: Some(storage), exposed: Some(exposed) })
+            }).transpose()?;
+
+            // --- Wire OUT
+            self.out_io = cfg.out.as_ref().map(|out_cfg| {
+                let storage = storage_map.get(&out_cfg.storage_backend)
+                    .cloned()
+                    .ok_or_else(|| anyhow::anyhow!("Storage endpoint '{}' not found", out_cfg.storage_backend))?;
+                let exposed = endpoint_map.get(&out_cfg.exposed_endpoint)
+                    .cloned()
+                    .ok_or_else(|| anyhow::anyhow!("Exposed endpoint '{}' not found", out_cfg.exposed_endpoint))?;
+                Ok::<IOInstance, anyhow::Error>(IOInstance { storage: Some(storage), exposed: Some(exposed) })
+            }).transpose()?;
+
+            // --- Instantiate backend based on format
+            self.backend = Some(match self.format {
+                ArtifactFormat::Rust => Arc::new(crate::repository::rust::RustRepo::new(self.name.clone()))
+                    as Arc<dyn RepositoryBackend>,
+                _ => return Err(anyhow::anyhow!("Backend not implemented for format: {:?}", self.format)),
+            });
+
+            Ok(())
+        }
+
+        pub fn backend(&self) -> Option<Arc<dyn RepositoryBackend>> {
+            self.backend.clone()
+        }
+
+
+    }
+    */
+
     pub fn wire(
         &mut self,
-        cfg: &Repository,
-        storage_map: &HashMap<String, Arc<StorageEndpointInstance>>,
-        endpoint_map: &HashMap<String, Arc<ExposedEndpointInstance>>,
-    ) -> anyhow::Result<()> {
+        cfg: &RepositoryConfig,
+        storage_endpoints: &[StorageEndpointInstance],
+        exposed_endpoints: &[ExposedEndpointInstance],
+    ) -> Result<()> {
         // --- Wire IN
         self.in_io = cfg.r#in.as_ref().map(|in_cfg| {
-            let storage = storage_map.get(&in_cfg.storage_backend)
+            let storage = storage_endpoints
+                .iter()
+                .find(|se| se.name == in_cfg.storage_backend)
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("Storage endpoint '{}' not found", in_cfg.storage_backend))?;
-            let exposed = endpoint_map.get(&in_cfg.exposed_endpoint)
+            let exposed = exposed_endpoints
+                .iter()
+                .find(|ee| ee.name == in_cfg.exposed_endpoint)
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("Exposed endpoint '{}' not found", in_cfg.exposed_endpoint))?;
-            Ok::<IOInstance, anyhow::Error>(IOInstance { storage: Some(storage), exposed: Some(exposed) })
+            Ok::<IOInstance, anyhow::Error>(IOInstance {
+                storage: Some(storage),
+                exposed: Some(exposed),
+            })
         }).transpose()?;
 
         // --- Wire OUT
         self.out_io = cfg.out.as_ref().map(|out_cfg| {
-            let storage = storage_map.get(&out_cfg.storage_backend)
+            let storage = storage_endpoints
+                .iter()
+                .find(|se| se.name == out_cfg.storage_backend)
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("Storage endpoint '{}' not found", out_cfg.storage_backend))?;
-            let exposed = endpoint_map.get(&out_cfg.exposed_endpoint)
+            let exposed = exposed_endpoints
+                .iter()
+                .find(|ee| ee.name == out_cfg.exposed_endpoint)
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("Exposed endpoint '{}' not found", out_cfg.exposed_endpoint))?;
-            Ok::<IOInstance, anyhow::Error>(IOInstance { storage: Some(storage), exposed: Some(exposed) })
+            Ok::<IOInstance, anyhow::Error>(IOInstance {
+                storage: Some(storage),
+                exposed: Some(exposed),
+            })
         }).transpose()?;
 
-        // --- Instantiate backend based on format
+        // --- Instantiate backend
         self.backend = Some(match self.format {
             ArtifactFormat::Rust => Arc::new(crate::repository::rust::RustRepo::new(self.name.clone()))
                 as Arc<dyn RepositoryBackend>,
@@ -257,7 +319,5 @@ impl RepositoryInstance {
 
         Ok(())
     }
-    pub fn backend(&self) -> Option<Arc<dyn RepositoryBackend>> {
-        self.backend.clone()
-    }
+
 }

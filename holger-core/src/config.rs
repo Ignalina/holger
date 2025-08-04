@@ -30,16 +30,10 @@ pub fn factory(config: &HolgerConfig) -> Result<HolgerInstance> {
         .iter()
         .map(|repo_cfg| RepositoryInstance::from_config(repo_cfg))
         .collect::<Result<_, _>>()?;
-
-    // 3b. WIRE: Link RepositoryInstances -> ExposedEndpointInstances
-    let mut repositories = repositories; // make mutable
-    for repo in &mut repositories {
-        if let Some(io) = repo.out_io.as_mut() {
-            if let Some(name) = &io.exposed_name {
-                if let Some(endpoint) = exposed_endpoints.iter().find(|ep| ep.name == *name) {
-                    io.exposed = Some(endpoint.clone());
-                }
-            }
+    // 3b
+    for (repo_cfg, repo) in config.repositories.iter().zip(&mut repositories) {
+        if let Some(backend) = repo.backend.as_ref() {
+            backend.wire(repo_cfg, &storage_endpoints, &exposed_endpoints)?;
         }
     }
     // 4. Build FastRoutes for each exposed endpoint
