@@ -1,6 +1,5 @@
 // holger-ron/src/lib.rs
 use serde::{Deserialize, Serialize};
-use async_trait::async_trait;
 //use hyper::{Request, Response, Body};
 //use hyper::body::{BoxBody, Bytes};
 
@@ -13,29 +12,101 @@ use std::{
 };
 
 use anyhow::Context;
-use hyper::{
-    body::Incoming as Body,
-    service::service_fn,
-    StatusCode,
-    Request,
-    Response
-};
-use http_body_util::combinators::BoxBody;
-use http_body_util::Full;
-
-use rustls_pemfile::certs;
-use tokio::net::TcpListener;
-use tokio_rustls::TlsAcceptor;
-use tokio_rustls::rustls::{pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer}, ServerConfig};
-
-use std::sync::Arc;
 use anyhow::Result;
-use bytes::Bytes;
 use ron::de::from_reader;
 
-// ========================= public use  =========================
+// ========================= Wire Holger  =========================
 
-//pub use {read_ron_config};
+use std::collections::HashMap;
+use crate::exposed::ExposedEndpoint;
+pub use crate::repository::Repository;
+pub use crate::storage::StorageEndpoint;
+
+pub mod exposed;
+mod repository;
+mod storage;
+
+pub fn wire_holger(holger: &mut Holger) -> Result<()> {
+    // ========================= PASS 1: Index by name =========================
+    let mut repo_map = HashMap::new();
+    let mut exposed_map = HashMap::new();
+    let mut storage_map = HashMap::new();
+
+    for repo in &*holger.repositories {
+        repo_map.insert(repo.ron_name.clone(), repo as *const Repository);
+    }
+    for exp in &*holger.exposed_endpoints {
+        exposed_map.insert(exp.ron_name.clone(), exp as *const ExposedEndpoint);
+    }
+    for st in &*holger.storage_endpoints {
+        storage_map.insert(st.ron_name.clone(), st as *const StorageEndpoint);
+    }
+
+    // ========================= PASS 2: Wire forward references =========================
+    for repo in &mut holger.repositories {
+        // Wire upstreams
+        for name in &repo.ron_upstreams {
+            if let Some(ptr) = repo_map.get(name) {
+                repo.wired_upstreams.push(*ptr);
+            } else {
+                return Err(anyhow::anyhow!("Missing upstream repo: {}", name));
+            }
+        }
+
+        // Wire IN IO
+        if let Some(io) = &mut repo.ron_in {
+            io.wired_storage = *storage_map
+                .get(&io.ron_storage_endpoint)
+                .ok_or_else(|| anyhow::anyhow!("Missing storage endpoint: {}", io.ron_storage_endpoint))?;
+            io.wired_exposed = *exposed_map
+                .get(&io.ron_exposed_endpoint)
+                .ok_or_else(|| anyhow::anyhow!("Missing exposed endpoint: {}", io.ron_exposed_endpoint))?;
+        }
+
+        // Wire OUT IO
+        if let Some(io) = &mut repo.ron_out {
+            io.wired_storage = *storage_map
+                .get(&io.ron_storage_endpoint)
+                .ok_or_else(|| anyhow::anyhow!("Missing storage endpoint: {}", io.ron_storage_endpoint))?;
+            io.wired_exposed = *exposed_map
+                .get(&io.ron_exposed_endpoint)
+                .ok_or_else(|| anyhow::anyhow!("Missing exposed endpoint: {}", io.ron_exposed_endpoint))?;
+        }
+    }
+
+    // ========================= PASS 2b: Wire reverse links =========================
+    for exp in &mut holger.exposed_endpoints {
+        for repo in &holger.repositories {
+            if let Some(io) = &repo.ron_in {
+                if io.ron_exposed_endpoint == exp.ron_name {
+                    exp.wired_in_repositories.push(repo as *const Repository);
+                }
+            }
+            if let Some(io) = &repo.ron_out {
+                if io.ron_exposed_endpoint == exp.ron_name {
+                    exp.wired_out_repositories.push(repo as *const Repository);
+                }
+            }
+        }
+    }
+
+    for st in &mut holger.storage_endpoints {
+        for repo in &holger.repositories {
+            if let Some(io) = &repo.ron_in {
+                if io.ron_storage_endpoint == st.ron_name {
+                    st.wired_in_repositories.push(repo as *const Repository);
+                }
+            }
+            if let Some(io) = &repo.ron_out {
+                if io.ron_storage_endpoint == st.ron_name {
+                    st.wired_out_repositories.push(repo as *const Repository);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
 
 // ========================= ROOT HOLGER =========================
 
@@ -55,134 +126,44 @@ pub fn read_ron_config<P: AsRef<Path>>(path: P) -> Result<Holger> {
     Ok(holger)
 }
 
+
+impl Holger {
+    pub fn start(&self) -> anyhow::Result<()> {
+        for ep in &self.exposed_endpoints {
+            let backend = ep.backend_http2.clone();
+            tokio::spawn(async move {
+                if let Err(e) = backend.start().await {
+                    eprintln!("Backend start failed: {e}");
+                }
+            });
+        }
+        Ok(())
+    }
+
+
+    pub fn stop(&self) -> anyhow::Result<()> {
+        for ep in &self.exposed_endpoints {
+            // Arc<Http2Backend> → just clone and call stop()
+            ep.backend_http2.stop()?;
+        }
+        Ok(())
+    }
+    pub fn instantiate_backends(&mut self) -> anyhow::Result<()> {
+        for ep in &mut self.exposed_endpoints {
+            ep.backend_from_config()?;
+        }
+        for se in &mut self.storage_endpoints {
+            se.backend_from_config()?;
+        }
+        for repo in &mut self.repositories {
+            repo.backend_from_config()?;
+        }
+        Ok(())
+    }
+}
 // ========================= RON STRUCTS =========================
 
-#[derive(Serialize, Deserialize)]
-pub struct Repository {
-    // Parsed from RON
-    pub ron_name: String,
-    pub ron_repo_type: String,        // rust/java/python/raw
-    pub ron_upstreams: Vec<String>,   // empty means no upstreams
-    pub ron_in: Option<RepositoryIO>,
-    pub ron_out: Option<RepositoryIO>,
-
-    // Wired in second pass
-    #[serde(skip_serializing, skip_deserializing)]
-    pub wired_backend: Option<Box<dyn RepositoryBackendTrait>>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub wired_upstreams: Vec<*const Repository>, // or &Repository pinned after build
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct RepositoryIO {
-    pub ron_storage_endpoint: String,
-    pub ron_exposed_endpoint: String,
 
 
-    #[serde(skip_serializing, skip_deserializing, default = "std::ptr::null")]
-    pub wired_storage: *const StorageEndpoint,
-    #[serde(skip_serializing, skip_deserializing, default = "std::ptr::null")]
-    pub wired_exposed: *const ExposedEndpoint,
-}
 
-#[derive(Serialize, Deserialize)]
-pub struct ExposedEndpoint {
-    pub ron_name: String,
-    pub ron_url: String, // Parsed internally to ip/port
-    #[serde(skip_serializing, skip_deserializing)]
-    pub backend_http2: Option<Box<dyn ExposedEndpoint_http2_Trait>>,
 
-    #[serde(skip_serializing, skip_deserializing)]
-    pub wired_in_repositories: Vec<*const Repository>,
-    #[serde(skip_serializing, skip_deserializing)]
-    pub wired_out_repositories: Vec<*const Repository>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct StorageEndpoint {
-    pub ron_name: String,
-    pub ron_storage_type: String, // "znippy" | "rocksdb"
-    pub ron_path: String,
-    #[serde(skip_serializing, skip_deserializing)]
-    pub backend_raf: Option<Box<dyn StorageEndpoint_raf_Trait>>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub wired_in_repositories: Vec<*const Repository>,
-    #[serde(skip_serializing, skip_deserializing)]
-    pub wired_out_repositories: Vec<*const Repository>,
-
-}
-
-// ========================= TRAITS =========================
-
-#[async_trait]
-pub trait RepositoryBackendTrait: Send + Sync {
-    fn name(&self) -> &str;
-
-    fn start(&self) -> Result<()>;
-    fn stop(&self) -> Result<()>;
-
-    fn from_config(repo: &Repository) -> Result<Self>
-    where
-        Self: Sized;
-
-    fn handle_http2_request(
-        &self,
-        suburl: &str,
-        body: &[u8],
-    ) -> anyhow::Result<(u16, Vec<(String, String)>, Vec<u8>)>;
-}
-
-#[async_trait]
-pub trait ExposedEndpoint_http2_Trait: Send + Sync {
-    fn name(&self) -> &str;
-
-    fn start(&self) -> Result<()>;
-    fn stop(&self) -> Result<()>;
-
-    fn from_config(endpoint: &ExposedEndpoint) -> Result<Self>
-    where
-        Self: Sized;
-
-    async fn handle_request(
-        &self,
-        req: Request<Body>,
-    ) -> Result<Response<BoxBody<Bytes, std::convert::Infallible>>, hyper::Error>;
-
-    fn set_fast_routes(&mut self, routes: FastRoutes);
-}
-
-pub trait StorageEndpoint_raf_Trait: Send + Sync {
-    fn name(&self) -> &str;
-
-    fn start(&self) -> Result<()>;
-    fn stop(&self) -> Result<()>;
-
-    fn from_config(endpoint: &StorageEndpoint) -> Result<Self>
-    where
-        Self: Sized;
-}
-
-// ========================= FAST ROUTES TRAIT =========================
-
-#[derive(Clone)]
-pub struct FastRoute {
-    pub name: String,
-    pub backend: Arc<dyn RepositoryBackendTrait>,
-}
-
-#[derive(Clone)]
-pub struct FastRoutes {
-    pub routes: Vec<FastRoute>,
-    pub first_byte_index: [usize; 256],
-    pub first_byte_len: [usize; 256],
-}
-
-pub trait FastRoutesTrait {
-    fn new(routes: Vec<(String, Arc<dyn RepositoryBackendTrait>)>) -> Self
-    where
-        Self: Sized;
-
-    fn lookup(&self, name: &str) -> Option<&Arc<dyn RepositoryBackendTrait>>;
-}

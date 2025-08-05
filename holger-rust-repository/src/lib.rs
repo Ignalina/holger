@@ -1,14 +1,12 @@
-use crate::RepositoryBackend;
 use std::any::Any;
 use anyhow::anyhow;
-use crate::{ArtifactFormat, ArtifactId, StorageEndpointInstance};
+use holger_traits::{ArtifactFormat, ArtifactId, RepositoryBackendTrait};
 
 /// Minimal RustRepo example
 pub struct RustRepo {
     pub name: String,
-    pub in_backend: Option<StorageEndpointInstance>,
-// todo make option
-    pub out_backend: Option<StorageEndpointInstance>,
+//    pub format: ArtifactFormat,
+    pub artifacts: Vec<ArtifactId>, // cached list of artifacts
 }
 
 impl RustRepo {
@@ -19,40 +17,15 @@ impl RustRepo {
             // Example: name
             // name,
             name,
-            in_backend: None,
-            out_backend: None,
+            artifacts: vec![],
         }
     }
 }
 
-impl RepositoryBackend for RustRepo {
+impl RepositoryBackendTrait for RustRepo {
     fn name(&self) -> &str {
         &self.name
     }
-
-    fn format(&self) -> ArtifactFormat {
-        ArtifactFormat::Rust
-    }
-
-    fn is_writable(&self) -> bool {
-        self.in_backend.is_some()
-    }
-
-    fn fetch(&self, _id: &ArtifactId) -> anyhow::Result<Option<Vec<u8>>> {
-        Ok(None)
-    }
-
-    fn put(&self, _id: &ArtifactId, _data: &[u8]) -> anyhow::Result<()> {
-        if self.in_backend.is_none() {
-            return Err(anyhow!("Repository '{}' is read-only", self.name));
-        }
-        Ok(())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
 
     fn handle_http2_request(
         &self,
@@ -100,6 +73,22 @@ impl RepositoryBackend for RustRepo {
         }
     }
 
+    fn format(&self) -> ArtifactFormat {
+        ArtifactFormat::Rust
+    }
+
+
+    fn is_writable(&self) -> bool {
+        todo!()
+    }
+
+    fn fetch(&self, id: &ArtifactId) -> anyhow::Result<Option<Vec<u8>>> {
+        todo!()
+    }
+
+    fn put(&self, id: &ArtifactId, data: &[u8]) -> anyhow::Result<()> {
+        todo!()
+    }
 }
 
 

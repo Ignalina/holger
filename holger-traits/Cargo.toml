@@ -1,5 +1,5 @@
 [package]
-name = "holger-ron"
+name = "holger-traits"
 version = "0.0.1"
 edition = "2021"
 authors = ["Rickard Lundin <rickard@x14.se>","Wilhelm Ågren"]
@@ -25,8 +25,7 @@ bytes = "1.10.1"
 anyhow = "1.0.98"
 
 derivative = "2.2.0"
-holger-traits = {path="../holger-traits"}
-holger-rust-repository = {path ="../holger-rust-repository"}
+
 hyper-util = { version = "0.1.16", features = ["tokio"] }
 tokio-rustls = "0.26.2"
 rustls = { version = "0.23.31", features = ["std"] }
@@ -39,3 +38,4 @@ url = "2.5.4"
 ctrlc = "3.4.7"
 log = "0.4.27"
 ron = "0.10.1"
+exposed = "0.0.1-beta"

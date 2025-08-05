@@ -16,31 +16,52 @@ use tokio_rustls::TlsAcceptor;
 use tokio_rustls::rustls::{pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer}, ServerConfig};
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use anyhow::Result;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::Full;
 use hyper::{Request, Response, StatusCode};
-use crate::{config, RepositoryBackend};
-use super::ExposedEndpointBackend;
+use hyper::server::conn::http2;
+use hyper_util::rt::TokioIo;
+
 /// HTTP2 backend holding routing to repository backends
+#[derive(Clone)]
 pub struct Http2Backend {
-    pub  name: String,
+    pub name: String,
     pub listener_addr: String,
-    pub port: u16,
-    pub tls_config: Arc<ServerConfig>,
+//    pub tls_config: Arc<ServerConfig>,
+    pub tls_config: Option<Arc<ServerConfig>>,
     pub running: Arc<AtomicBool>,
     pub fast_routes: Option<FastRoutes>,
 }
 
+// ✅ Implement the real Default trait
+impl Default for Http2Backend {
+    fn default() -> Self {
+        Self::newd()
+    }
+}
+
 impl Http2Backend {
     /// Register a repository backend to a sub-URL
-    pub fn new(name: String, listener_addr: String, port: u16,tls_config: Arc<ServerConfig>) -> Self {
+    fn newd() -> Self {
+        Http2Backend {
+
+            // init fields
+            name: "".to_string(),
+            listener_addr: "".to_string(),
+            tls_config: None,
+            running: Arc::new(Default::default()),
+            fast_routes: None,
+        }
+    }
+
+    pub fn new(name: String, listener_addr: String,tls_config: Arc<ServerConfig>) -> Self {
         Self {
             name,
             listener_addr,
-            port,
-            tls_config,
+            tls_config: Some(tls_config),
             running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             fast_routes: None,
         }
@@ -53,29 +74,26 @@ impl Http2Backend {
     }
 
     pub fn from_config(
-        name: impl Into<String>,
-        url_prefix: &str,
-        cert_path: &str,
-        key_path: &str,
+        name:  String,
+        listener_addr: String,
+        cert_path: String,
+        key_path: String,
     ) -> anyhow::Result<Self> {
-        let (host, port) = config::parse_ip_port(&url_prefix);
-        let tls_config = Arc::new(load_tls_config(cert_path, key_path)?);
-
-        let tls_config = Arc::new(load_tls_config(cert_path, key_path)?);
+//      let (host, port) = config::parse_ip_port(&url_prefix);
+        let tls_config = Arc::new(load_tls_config(&cert_path, &key_path)?);
 
         // Compose listener address like "host:port"
-        let listener_addr = format!("{}:{}", host, port);
+//      let listener_addr = format!("{}:{}", host, port);
 
         Ok(Self {
             name: name.into(),
             listener_addr,
-            port,
-            tls_config,
+            tls_config: Some(tls_config),
             running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             fast_routes: None,
         })
     }
-    pub(crate) fn parse_ip_port(url: &str) -> (String, u16) {
+    pub fn parse_ip_port(url: &str) -> (String, u16) {
         let clean = url.trim_end_matches('/');
         let without_scheme = clean.split("://").nth(1).unwrap_or(clean);
         let mut parts = without_scheme.split(':');
@@ -85,14 +103,13 @@ impl Http2Backend {
     }
 
 
-
-
     /// ✅ Now takes &self, safe to call from factory
     /// Start serving requests asynchronously (spawns a background task)
     /// 2️⃣ Start serving HTTPS + HTTP/2 using the internal routing map
     pub async fn start(self: Arc<Self>) -> anyhow::Result<JoinHandle<()>> {
         let listener = TcpListener::bind(&self.listener_addr).await?;
-        let tls_acceptor = TlsAcceptor::from(self.tls_config.clone());
+        let tls_acceptor = self.tls_config.as_ref().cloned().map(TlsAcceptor::from);
+//        let tls_acceptor = TlsAcceptor::from(self.tls_config.clone());
         self.running.store(true, Ordering::SeqCst);
 
         println!("Listening on https://{}", self.listener_addr);
@@ -111,22 +128,32 @@ impl Http2Backend {
                 };
 
                 let acceptor = tls_acceptor.clone();
+
+
                 let this = Arc::clone(&self);
 
                 tokio::spawn(async move {
+                    let Some(acceptor) = acceptor else {
+                        eprintln!("No TLS acceptor configured");
+                        return;
+                    };
+
                     let Ok(tls_stream) = acceptor.accept(stream).await else {
                         eprintln!("TLS handshake failed");
                         return;
                     };
-
                     let io = TokioIo::new(tls_stream);
                     let builder = http2::Builder::new(hyper_util::rt::TokioExecutor::new());
 
                     if let Err(err) = builder
-                        .serve_connection(io, service_fn(move |req| {
-                            let this = Arc::clone(&this);
-                            async move { this.handle_request(req).await }
-                        }))
+                        .serve_connection(io, {
+                            let this = Arc::clone(&this); // one clone per connection
+                            service_fn(move |req| {
+                                // Only clone Arc if needed per request
+                                let this = Arc::clone(&this);
+                                async move { this.handle_request(req).await }
+                            })
+                        })
                         .await
                     {
                         eprintln!("Connection error: {:?}", err);
@@ -138,22 +165,17 @@ impl Http2Backend {
         Ok(handle)
     }
 
-
-
-
-}
-
-#[async_trait::async_trait]
-impl ExposedEndpointBackend for Http2Backend {
-
-    fn name(&self) -> &str {
-        &self.name
+    pub(crate) fn stop(&self) -> anyhow::Result<()> {
+        // Signal the server loop to exit
+        self.running.store(false, std::sync::atomic::Ordering::SeqCst);
+        println!("Stopping HTTP2 backend on {}", self.listener_addr);
+        Ok(())
     }
-    fn set_fast_routes(&mut self, routes: FastRoutes) {
-        self.fast_routes = Some(routes);
-    }
+
+
+//    async fn handle_request(self: Arc<Self>, req: Request<Body>) -> Result<Response<BoxBody<Bytes, Infallible>>, hyper::Error>
     async fn handle_request(
-        &self,
+        self: Arc<Self>,
         req: Request<Body>,
     ) -> Result<Response<BoxBody<Bytes, std::convert::Infallible>>, hyper::Error> {
         let path = req.uri().path().to_string();
@@ -172,16 +194,18 @@ impl ExposedEndpointBackend for Http2Backend {
             println!("routing to repo.name={}", repo.name());
 
 
+
+
             let suburl_owned = suburl.to_string();
             let body_owned = body_vec;
+            let repo_clone = Arc::clone(repo);
 
-            let result = tokio::task::spawn_blocking({
-                let repo_arc = Arc::clone(repo);
-                move || repo_arc.handle_http2_request(&suburl_owned, &body_owned)
+            let result = tokio::task::spawn_blocking(move || {
+                repo_clone.handle_http2_request(&suburl_owned, &body_owned)
             })
                 .await
                 .unwrap();
-            
+
             match result {
                 Ok((status, headers, data)) => {
                     let mut response = Response::builder()
@@ -204,26 +228,8 @@ impl ExposedEndpointBackend for Http2Backend {
         }
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 
-    fn start(&self) -> anyhow::Result<()> {
-        println!("Starting HTTP2 backend on {}:{}", self.listener_addr, self.port);
-        // Here you would normally bind the TCP listener and spawn the server thread.
-        // For now, just mark as running.
-        self.running.store(true, std::sync::atomic::Ordering::SeqCst);
-        Ok(())
-    }
-
-    fn stop(&self) -> anyhow::Result<()> {
-        // Signal the server loop to exit
-        self.running.store(false, std::sync::atomic::Ordering::SeqCst);
-        println!("Stopping HTTP2 backend on {}:{}", self.listener_addr, self.port);
-        Ok(())
-    }
 }
-
 
 
 
@@ -254,7 +260,9 @@ fn load_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
 
 
 use rustls_pemfile::{read_all, Item};
+use tokio::task::JoinHandle;
 use tokio_rustls::rustls::pki_types::{PrivatePkcs8KeyDer, PrivateSec1KeyDer};
+use crate::exposed::fast_routes::FastRoutes;
 
 fn load_key(path: &Path) -> Result<PrivateKeyDer<'static>> {
     let file = File::open(path)?;
@@ -283,22 +291,11 @@ fn load_key(path: &Path) -> Result<PrivateKeyDer<'static>> {
     Err(anyhow::anyhow!("no private key found"))
 }
 
-
-/*******
-
-
-
-
-
- */
-use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::task::JoinHandle;
-use hyper::server::conn::http2;
-use hyper_util::rt::TokioIo;
-use crate::exposed::fast_routes::FastRoutes;
-/*
-
-
- */
-
-
+pub(crate) fn parse_ip_port(url: &str) -> (String, u16) {
+    let clean = url.trim_end_matches('/');
+    let without_scheme = clean.split("://").nth(1).unwrap_or(clean);
+    let mut parts = without_scheme.split(':');
+    let ip = parts.next().unwrap_or("127.0.0.1").to_string();
+    let port = parts.next().and_then(|p| p.parse().ok()).unwrap_or(443);
+    (ip, port)
+}

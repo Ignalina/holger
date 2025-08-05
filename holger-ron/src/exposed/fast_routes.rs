@@ -1,11 +1,13 @@
 use std::sync::Arc;
-use crate::RepositoryBackend;
+use holger_traits::RepositoryBackendTrait;
+use crate::exposed::http2_backend::Http2Backend;
+
 
 #[derive(Clone)]
 pub struct FastRoute {
     pub name: String,
     // todo make Option
-    pub backend: Arc<dyn RepositoryBackend>,
+    pub backend: Arc<dyn RepositoryBackendTrait>,
 }
 
 #[derive(Clone)]
@@ -16,7 +18,7 @@ pub struct FastRoutes {
 }
 
 impl FastRoutes {
-    pub fn new(routes: Vec<(String, Arc<dyn RepositoryBackend>)>) -> Self {
+    pub fn new(routes: Vec<(String, Arc<dyn RepositoryBackendTrait>)>) -> Self {
         let mut routes_vec: Vec<FastRoute> = routes
             .into_iter()
             .map(|(name, backend)| FastRoute { name, backend })
@@ -53,7 +55,7 @@ impl FastRoutes {
         }
     }
 
-    pub fn lookup(&self, name: &str) -> Option<&Arc<dyn RepositoryBackend>> {
+    pub fn lookup(&self, name: &str) -> Option<&Arc<dyn RepositoryBackendTrait>> {
         let bytes = name.as_bytes();
         let first = bytes.first().copied().unwrap_or(0) as usize;
 
