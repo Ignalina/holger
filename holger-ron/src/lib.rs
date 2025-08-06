@@ -138,8 +138,9 @@ pub fn wire_holger(holger: &mut Holger) -> Result<()> {
             exposed.wired_out_repositories.push(repo_ptr);
         }
     }
-    // ========================= PASS 4: Attach FastRoutes =========================
+    // ========================= PASS 4: Attach FastRoutes and backend =========================
     for exp in &mut holger.exposed_endpoints {
+        // 1️⃣ Build route table
         let mut routes: Vec<(String, Arc<dyn RepositoryBackendTrait>)> = Vec::new();
 
         for &repo_ptr in &exp.wired_out_repositories {
@@ -147,7 +148,6 @@ pub fn wire_holger(holger: &mut Holger) -> Result<()> {
             let repo: &Repository = unsafe { &*repo_ptr };
 
             if let Some(backend_arc) = &repo.backend_repository {
-                // backend_repository is Arc<dyn RepositoryBackendTrait>
                 routes.push((repo.ron_name.clone(), backend_arc.clone()));
             }
         }
@@ -157,7 +157,19 @@ pub fn wire_holger(holger: &mut Holger) -> Result<()> {
         } else {
             Some(FastRoutes::new(routes))
         };
-    }    Ok(())
+
+        // 2️⃣ Instantiate backend
+        exp.backend_from_config()?;
+
+        // 3️⃣ Pass aggregated_routes to Http2Backend
+        if let Some(routes) = exp.aggregated_routes.clone() {
+            let backend_mut = Arc::get_mut(&mut exp.backend_http2)
+                .expect("backend_http2 Arc must be unique here in wire_holger");
+            backend_mut.set_fast_routes(routes);
+        }
+    }
+
+    Ok(())
 }
 
 // ========================= ROOT HOLGER =========================
