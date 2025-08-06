@@ -18,7 +18,9 @@ use ron::de::from_reader;
 // ========================= Wire Holger  =========================
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use crate::exposed::ExposedEndpoint;
+use crate::exposed::fast_routes::FastRoutes;
 pub use crate::repository::Repository;
 pub use crate::storage::StorageEndpoint;
 
@@ -135,8 +137,25 @@ pub fn wire_holger(holger: &mut Holger) -> Result<()> {
             exposed.wired_out_repositories.push(repo_ptr);
         }
     }
+    // ========================= PASS 4: Attach FastRoutes =========================
+    for exp in &mut holger.exposed_endpoints {
+        let mut routes = Vec::new();
 
+        for &repo_ptr in &exp.wired_out_repositories {
+            if repo_ptr.is_null() { continue; }
+            let repo: &Repository = unsafe { &*repo_ptr };
 
+            if let Some(backend_arc) = &repo.backend_repository {
+                routes.push((repo.ron_name.clone(), backend_arc.clone()));
+            }
+        }
+
+        exp.aggregated_routes = if routes.is_empty() {
+            None
+        } else {
+            Some(FastRoutes::new(routes))
+        };
+    }
     Ok(())
 }
 

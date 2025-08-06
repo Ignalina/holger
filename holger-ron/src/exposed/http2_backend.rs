@@ -68,8 +68,7 @@ impl Http2Backend {
     }
     /// Inject FastRoutes after construction (2‑pass wiring)
 
-
-    fn set_fast_routes(&mut self, routes: FastRoutes) {
+    pub(crate) fn set_fast_routes(&mut self, routes: FastRoutes) {
         self.fast_routes = Some(routes);
     }
 
@@ -83,39 +82,18 @@ impl Http2Backend {
         let port = parts.next().and_then(|p| p.parse().ok()).unwrap_or(443);
         (ip, port)
     }
-    pub fn backend_from_config(ep: ExposedEndpoint) -> anyhow::Result<Self> {
+    pub fn backend_from_config(ep: &ExposedEndpoint) -> anyhow::Result<Self> {
         let tls_config = Arc::new(load_tls_config(ep.ron_cert.as_str(), ep.ron_key.as_str())?);
 
-        // Build routes for FastRoutes
-        let mut routes: Vec<(String, Arc<dyn RepositoryBackendTrait>)> = Vec::new();
-
-        for &repo_ptr in &ep.wired_out_repositories {
-            if repo_ptr.is_null() {
-                continue;
-            }
-
-            let repo: &Repository = unsafe { &*repo_ptr };
-
-            if let Some(backend_arc) = &repo.backend_repository {
-                // Arc is cheap to clone
-                routes.push((repo.ron_name.clone(), backend_arc.clone()));
-            }
-        }
-
-        let fast_routes = if routes.is_empty() {
-            None
-        } else {
-            Some(FastRoutes::new(routes))
-        };
-
         Ok(Self {
-            name: ep.ron_name,
-            listener_addr: ep.ron_url,
+            name: ep.ron_name.clone(),
+            listener_addr: ep.ron_url.clone(),
             tls_config: Some(tls_config),
             running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            fast_routes,
+            fast_routes: None, // routes attached later
         })
     }
+
     /// ✅ Now takes &self, safe to call from factory
     /// Start serving requests asynchronously (spawns a background task)
     /// 2️⃣ Start serving HTTPS + HTTP/2 using the internal routing map

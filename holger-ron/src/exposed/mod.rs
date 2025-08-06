@@ -24,20 +24,24 @@ pub struct ExposedEndpoint {
     #[serde(skip_serializing, skip_deserializing, default)]
     pub backend_http2: Arc<Http2Backend>,
     #[serde(skip_serializing, skip_deserializing, default)]
+    pub aggregated_routes: Option<FastRoutes>,
+
+    #[serde(skip_serializing, skip_deserializing, default)]
     pub wired_in_repositories: Vec<*const Repository>,
     #[serde(skip_serializing, skip_deserializing, default)]
     pub wired_out_repositories: Vec<*const Repository>,
 }
 
 impl ExposedEndpoint {
-    fn default() -> Self {
-        Self::new() // or whatever constructor
-    }
+
     pub fn backend_from_config(&mut self) -> anyhow::Result<()> {
-        // instantiate self.backend_http2 or similar
+        let mut backend = Http2Backend::backend_from_config(self)?;
+
+        if let Some(routes) = self.aggregated_routes.take() {
+            backend.set_fast_routes(routes);
+        }
+
+        self.backend_http2 = Arc::new(backend);
         Ok(())
-    }
-    fn new() -> ExposedEndpoint {
-        todo!()
     }
 }

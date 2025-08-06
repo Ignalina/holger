@@ -18,6 +18,7 @@ pub struct Repository {
     // Wired in second pass
     #[serde(skip_serializing, skip_deserializing, default)]
     pub backend_repository: Option<Arc<dyn RepositoryBackendTrait>>,
+    
 
 
     #[serde(skip_serializing, skip_deserializing, default)]
@@ -27,18 +28,20 @@ impl Repository {
     pub fn backend_from_config(&mut self) -> anyhow::Result<()> {
         match self.ron_repo_type.as_str() {
             "rust" => {
-                // Create the RustRepo and wrap it in Arc<dyn RepositoryBackendTrait>
-                let backend: Arc<dyn RepositoryBackendTrait> = Arc::new(RustRepo {
+                self.backend_repository = Some(Arc::new(RustRepo {
                     name: self.ron_name.clone(),
                     artifacts: vec![],
-                });
-
-                self.backend_repository = Some(backend);
+                }));
                 Ok(())
             }
             other => anyhow::bail!("Unsupported repository type: {}", other),
         }
-    }}
+    }
+
+}
+
+
+
 
 #[derive(Serialize, Deserialize)]
 pub struct RepositoryIO {

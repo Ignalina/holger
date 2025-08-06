@@ -3,8 +3,8 @@
         (
             ron_name: "prod",
             ron_url: "https://10.101.1.9:8443",
-            cert: "/home/rickard/RustroverProjects/holger/holger-core/tests/certs/cert.pem",
-            key: "/home/rickard/RustroverProjects/holger/holger-core/tests/certs/key.pem"
+            ron_cert: "/home/rickard/RustroverProjects/holger/holger-ron/tests/certs/cert.pem",
+            ron_key: "/home/rickard/RustroverProjects/holger/holger-ron/tests/certs/key.pem"
         ),
     ],
 

@@ -49,7 +49,7 @@ pub fn run() -> Result<()> {
 
             let backend=holger.instantiate_backends();
 
-            //            holger.start()?;
+            holger.start()?;
 
             println!("Holger is running. Press Ctrl+C to stop.");
 
@@ -105,5 +105,103 @@ pub fn print_wiring_summary(holger: &Holger) {
         println!("Wiring looks OK.");
     } else {
         println!("Wiring has issues.");
+    }
+
+
+    println!("--- Reverse Wiring ---");
+
+    for (i, ep) in holger.exposed_endpoints.iter().enumerate() {
+        println!(
+            "[Exposed #{i}] {} | in:{} out:{}",
+            ep.ron_name,
+            ep.wired_in_repositories.len(),
+            ep.wired_out_repositories.len()
+        );
+    }
+
+    for (i, st) in holger.storage_endpoints.iter().enumerate() {
+        println!(
+            "[Storage #{i}] {} | in:{} out:{}",
+            st.ron_name,
+            st.wired_in_repositories.len(),
+            st.wired_out_repositories.len()
+        );
+    }
+    println!("--- Aggregated Routes Debug ---");
+
+    for (i, ep) in holger.exposed_endpoints.iter().enumerate() {
+        println!(
+            "[Exposed #{i}] {} | aggregated_routes: {}",
+            ep.ron_name,
+            if ep.aggregated_routes.is_some() { "yes" } else { "no" }
+        );
+
+        if !ep.wired_out_repositories.is_empty() {
+            for &repo_ptr in &ep.wired_out_repositories {
+                if repo_ptr.is_null() {
+                    println!("    -> null pointer (skipped)");
+                    continue;
+                }
+                let repo = unsafe { &*repo_ptr };
+                println!(
+                    "    -> wired repo: {} | backend: {}",
+                    repo.ron_name,
+                    if repo.backend_repository.is_some() { "ready" } else { "none" }
+                );
+            }
+        } else {
+            println!("    -> no wired out repositories");
+        }
+    }
+
+    println!("--- Aggregated Routes Deep Check ---");
+
+    for (i, ep) in holger.exposed_endpoints.iter().enumerate() {
+        let mut possible_routes = 0;
+        let mut ready_routes = 0;
+
+        println!(
+            "[Exposed #{i}] {} | aggregated_routes: {}",
+            ep.ron_name,
+            if ep.aggregated_routes.is_some() { "yes" } else { "no" }
+        );
+
+        if ep.wired_out_repositories.is_empty() {
+            println!("    -> no wired out repositories");
+        } else {
+            for &repo_ptr in &ep.wired_out_repositories {
+                if repo_ptr.is_null() {
+                    println!("    -> null pointer (skipped)");
+                    continue;
+                }
+                let repo = unsafe { &*repo_ptr };
+                possible_routes += 1;
+
+                let expected = &ep.ron_name;
+                let actual = if let Some(io) = &repo.ron_out {
+                    &io.ron_exposed_endpoint
+                } else {
+                    "<none>"
+                };
+
+                let backend_ready = repo.backend_repository.is_some();
+                if backend_ready {
+                    ready_routes += 1;
+                }
+
+                println!(
+                    "    -> wired repo: {} | backend:{} | expected:{} vs actual:{}",
+                    repo.ron_name,
+                    if backend_ready { "ready" } else { "none" },
+                    expected,
+                    actual
+                );
+            }
+        }
+
+        println!(
+            "    -> route candidates: {} | ready for FastRoutes: {}",
+            possible_routes, ready_routes
+        );
     }
 }
