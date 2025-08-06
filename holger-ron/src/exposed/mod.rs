@@ -37,10 +37,6 @@ impl ExposedEndpoint {
     pub fn backend_from_config(&mut self) -> anyhow::Result<()> {
         let mut backend = Http2Backend::backend_from_config(self)?;
 
-        if let Some(routes) = self.aggregated_routes.take() {
-            backend.set_fast_routes(routes);
-        }
-
         self.backend_http2 = Arc::new(backend);
         Ok(())
     }

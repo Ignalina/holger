@@ -38,6 +38,8 @@ pub async fn run() -> Result<()> {
             println!("Starting Holger {:?}",config);
 
             let mut holger = holger_ron::read_ron_config(config)?;
+            let backend=holger.instantiate_backends();
+
             let r=wire_holger(&mut holger);
             print_wiring_summary(&holger);
             let cfg = PrettyConfig::new()
@@ -47,7 +49,6 @@ pub async fn run() -> Result<()> {
 
             println!("{}", to_string_pretty(&holger, cfg)?);
 
-            let backend=holger.instantiate_backends();
 
             holger.start()?;
 

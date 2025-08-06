@@ -19,6 +19,7 @@ use ron::de::from_reader;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use holger_traits::RepositoryBackendTrait;
 use crate::exposed::ExposedEndpoint;
 use crate::exposed::fast_routes::FastRoutes;
 pub use crate::repository::Repository;
@@ -139,13 +140,14 @@ pub fn wire_holger(holger: &mut Holger) -> Result<()> {
     }
     // ========================= PASS 4: Attach FastRoutes =========================
     for exp in &mut holger.exposed_endpoints {
-        let mut routes = Vec::new();
+        let mut routes: Vec<(String, Arc<dyn RepositoryBackendTrait>)> = Vec::new();
 
         for &repo_ptr in &exp.wired_out_repositories {
             if repo_ptr.is_null() { continue; }
             let repo: &Repository = unsafe { &*repo_ptr };
 
             if let Some(backend_arc) = &repo.backend_repository {
+                // backend_repository is Arc<dyn RepositoryBackendTrait>
                 routes.push((repo.ron_name.clone(), backend_arc.clone()));
             }
         }
@@ -155,8 +157,7 @@ pub fn wire_holger(holger: &mut Holger) -> Result<()> {
         } else {
             Some(FastRoutes::new(routes))
         };
-    }
-    Ok(())
+    }    Ok(())
 }
 
 // ========================= ROOT HOLGER =========================
