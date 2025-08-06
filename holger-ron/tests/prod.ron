@@ -2,7 +2,7 @@
     exposed_endpoints: [
         (
             ron_name: "prod",
-            ron_url: "https://172.20.10.8:8443",
+            ron_url: "https://127.0.0.1:8443",
             ron_cert: "/home/rickard/RustroverProjects/holger/holger-ron/tests/certs/cert.pem",
             ron_key: "/home/rickard/RustroverProjects/holger/holger-ron/tests/certs/key.pem"
         ),

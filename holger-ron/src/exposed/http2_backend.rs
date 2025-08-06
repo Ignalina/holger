@@ -85,9 +85,13 @@ impl Http2Backend {
     pub fn backend_from_config(ep: &ExposedEndpoint) -> anyhow::Result<Self> {
         let tls_config = Arc::new(load_tls_config(ep.ron_cert.as_str(), ep.ron_key.as_str())?);
 
+
+        let (host, port) = Self::parse_ip_port(ep.ron_url.as_str());
+        let listener_addr = format!("{}:{}", host, port);
+
         Ok(Self {
             name: ep.ron_name.clone(),
-            listener_addr: ep.ron_url.clone(),
+            listener_addr,
             tls_config: Some(tls_config),
             running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             fast_routes: None, // routes attached later
