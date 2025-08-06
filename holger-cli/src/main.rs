@@ -28,8 +28,8 @@ enum Commands {
     },
 
 }
-
-pub fn run() -> Result<()> {
+#[tokio::main]
+pub async fn run() -> Result<()> {
     env_logger::init();
     let cli = Cli::parse();
 
