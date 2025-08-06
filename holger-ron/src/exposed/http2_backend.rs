@@ -73,26 +73,8 @@ impl Http2Backend {
         self.fast_routes = Some(routes);
     }
 
-    pub fn from_config(
-        name:  String,
-        listener_addr: String,
-        cert_path: String,
-        key_path: String,
-    ) -> anyhow::Result<Self> {
-//      let (host, port) = config::parse_ip_port(&url_prefix);
-        let tls_config = Arc::new(load_tls_config(&cert_path, &key_path)?);
 
-        // Compose listener address like "host:port"
-//      let listener_addr = format!("{}:{}", host, port);
 
-        Ok(Self {
-            name: name.into(),
-            listener_addr,
-            tls_config: Some(tls_config),
-            running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            fast_routes: None,
-        })
-    }
     pub fn parse_ip_port(url: &str) -> (String, u16) {
         let clean = url.trim_end_matches('/');
         let without_scheme = clean.split("://").nth(1).unwrap_or(clean);
@@ -101,8 +83,39 @@ impl Http2Backend {
         let port = parts.next().and_then(|p| p.parse().ok()).unwrap_or(443);
         (ip, port)
     }
+    pub fn backend_from_config(ep: ExposedEndpoint) -> anyhow::Result<Self> {
+        let tls_config = Arc::new(load_tls_config(ep.ron_cert.as_str(), ep.ron_key.as_str())?);
 
+        // Build routes for FastRoutes
+        let mut routes: Vec<(String, Arc<dyn RepositoryBackendTrait>)> = Vec::new();
 
+        for &repo_ptr in &ep.wired_out_repositories {
+            if repo_ptr.is_null() {
+                continue;
+            }
+
+            let repo: &Repository = unsafe { &*repo_ptr };
+
+            if let Some(backend_arc) = &repo.backend_repository {
+                // Arc is cheap to clone
+                routes.push((repo.ron_name.clone(), backend_arc.clone()));
+            }
+        }
+
+        let fast_routes = if routes.is_empty() {
+            None
+        } else {
+            Some(FastRoutes::new(routes))
+        };
+
+        Ok(Self {
+            name: ep.ron_name,
+            listener_addr: ep.ron_url,
+            tls_config: Some(tls_config),
+            running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            fast_routes,
+        })
+    }
     /// ✅ Now takes &self, safe to call from factory
     /// Start serving requests asynchronously (spawns a background task)
     /// 2️⃣ Start serving HTTPS + HTTP/2 using the internal routing map
@@ -183,11 +196,6 @@ impl Http2Backend {
 
         let body_bytes = req.into_body().collect().await?.to_bytes();
         let body_vec = body_bytes.to_vec();
-
-
-
-
-
         let repo_key = suburl.split('/').next().unwrap_or("");
         println!("Repo key: {}", repo_key);
         if let Some(repo) = self.fast_routes.as_ref().and_then(|routes| routes.lookup(repo_key)) {
@@ -262,7 +270,10 @@ fn load_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
 use rustls_pemfile::{read_all, Item};
 use tokio::task::JoinHandle;
 use tokio_rustls::rustls::pki_types::{PrivatePkcs8KeyDer, PrivateSec1KeyDer};
+use holger_traits::RepositoryBackendTrait;
+use crate::exposed::ExposedEndpoint;
 use crate::exposed::fast_routes::FastRoutes;
+use crate::Repository;
 
 fn load_key(path: &Path) -> Result<PrivateKeyDer<'static>> {
     let file = File::open(path)?;

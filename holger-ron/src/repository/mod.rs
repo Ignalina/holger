@@ -1,5 +1,6 @@
 mod types;
 
+use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use holger_rust_repository::RustRepo;
 use holger_traits::RepositoryBackendTrait;
@@ -16,7 +17,8 @@ pub struct Repository {
 
     // Wired in second pass
     #[serde(skip_serializing, skip_deserializing, default)]
-    pub backend_repository: Option<Box<dyn RepositoryBackendTrait>>,
+    pub backend_repository: Option<Arc<dyn RepositoryBackendTrait>>,
+
 
     #[serde(skip_serializing, skip_deserializing, default)]
     pub wired_upstreams: Vec<*const Repository>, // or &Repository pinned after build
@@ -25,14 +27,18 @@ impl Repository {
     pub fn backend_from_config(&mut self) -> anyhow::Result<()> {
         match self.ron_repo_type.as_str() {
             "rust" => {
-                self.backend_repository =
-                    Some(Box::new(RustRepo { name: self.ron_name.clone(), artifacts: vec![] } ));
+                // Create the RustRepo and wrap it in Arc<dyn RepositoryBackendTrait>
+                let backend: Arc<dyn RepositoryBackendTrait> = Arc::new(RustRepo {
+                    name: self.ron_name.clone(),
+                    artifacts: vec![],
+                });
+
+                self.backend_repository = Some(backend);
                 Ok(())
             }
             other => anyhow::bail!("Unsupported repository type: {}", other),
         }
-    }
-}
+    }}
 
 #[derive(Serialize, Deserialize)]
 pub struct RepositoryIO {

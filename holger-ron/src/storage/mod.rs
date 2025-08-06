@@ -12,7 +12,7 @@ pub struct StorageEndpoint {
     pub ron_storage_type: String, // "znippy" | "rocksdb"
     pub ron_path: String,
 
-    #[serde(skip_serializing, skip_deserializing, default)]
+    #[serde(skip_deserializing, skip_serializing, default)]
     pub backend_raf: Arc<RafBackend>,
 
     #[serde(skip_serializing, skip_deserializing, default)]

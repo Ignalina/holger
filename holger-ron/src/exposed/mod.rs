@@ -19,6 +19,8 @@ pub mod fast_routes;
 pub struct ExposedEndpoint {
     pub ron_name: String,
     pub ron_url: String, // Parsed internally to ip/port
+    pub ron_cert: String,
+    pub ron_key: String,
     #[serde(skip_serializing, skip_deserializing, default)]
     pub backend_http2: Arc<Http2Backend>,
     #[serde(skip_serializing, skip_deserializing, default)]

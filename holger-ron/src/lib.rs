@@ -105,6 +105,38 @@ pub fn wire_holger(holger: &mut Holger) -> Result<()> {
         }
     }
 
+    // ========================= PASS 3: Reverse wiring =========================
+    for repo in &holger.repositories {
+        let repo_ptr = repo as *const Repository;
+
+        // Wire IN
+        if let Some(io) = &repo.ron_in {
+            // Storage reverse link
+            let storage_ptr = io.wired_storage;
+            let storage = unsafe { &mut *(storage_ptr as *mut StorageEndpoint) };
+            storage.wired_in_repositories.push(repo_ptr);
+
+            // Exposed reverse link
+            let exposed_ptr = io.wired_exposed;
+            let exposed = unsafe { &mut *(exposed_ptr as *mut ExposedEndpoint) };
+            exposed.wired_in_repositories.push(repo_ptr);
+        }
+
+        // Wire OUT
+        if let Some(io) = &repo.ron_out {
+            // Storage reverse link
+            let storage_ptr = io.wired_storage;
+            let storage = unsafe { &mut *(storage_ptr as *mut StorageEndpoint) };
+            storage.wired_out_repositories.push(repo_ptr);
+
+            // Exposed reverse link
+            let exposed_ptr = io.wired_exposed;
+            let exposed = unsafe { &mut *(exposed_ptr as *mut ExposedEndpoint) };
+            exposed.wired_out_repositories.push(repo_ptr);
+        }
+    }
+
+
     Ok(())
 }
 

@@ -47,6 +47,8 @@ pub fn run() -> Result<()> {
 
             println!("{}", to_string_pretty(&holger, cfg)?);
 
+            let backend=holger.instantiate_backends();
+
             //            holger.start()?;
 
             println!("Holger is running. Press Ctrl+C to stop.");
