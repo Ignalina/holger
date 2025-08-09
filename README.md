@@ -215,7 +215,7 @@ artifact_V3 --> GOPROXY_prod
 - ✅ Znippy archive ingestion
 - ✅ Arrow-based indexing
 - ✅ Immutable .artifact output
-- ⛖ API servers in progress
+- ✅ API server
 - 🚽 Blake3 verification in place
 - 
 
