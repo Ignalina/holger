@@ -1,6 +1,6 @@
 [package]
 name = "holger-cli"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Rickard Lundin <rickard@x14.se>" ,"Wilhelm Ågren"]
 description = "Holger guards your artifacts at rest."
@@ -19,3 +19,4 @@ env_logger = "0.11.8"
 ctrlc = "3.4.7"
 ron = "0.10.1"
 tokio = "1.47.1"
+holger-cli = "0.2.0"
