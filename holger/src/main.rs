@@ -1,3 +1,3 @@
 fn main() {
-    holger-cli::run().unwrap();
+    holger_cli::run().unwrap();
 }
