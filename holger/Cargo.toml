@@ -1,6 +1,6 @@
 [package]
 name = "holger"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Rickard Lundin <rickard@x14.se>","Wilhelm Ågren"]
 description = "Holger guards your artifacts at rest. May Allfather Odin watch over every bit."
@@ -12,4 +12,6 @@ keywords = ["znippy", "artifacts", "blake3", "cli","airgap"]
 
 [dependencies]
 #holger-cli = {path="../holger-cli"}
-holger-cli = {version = "0.2.0"}
+holger-cli = {version = "0.2.1"}
+tokio = "1.47.1"
+anyhow = "1.0.98"
