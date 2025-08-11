@@ -12,6 +12,6 @@ keywords = ["znippy", "artifacts", "blake3", "cli","airgap"]
 
 [dependencies]
 #holger-cli = {path="../holger-cli"}
-holger-cli = {version = "0.2.1"}
+holger-cli = {version = "0.2.2"}
 tokio = "1.47.1"
 anyhow = "1.0.98"

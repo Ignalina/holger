@@ -2,6 +2,6 @@
 
 [workspace]
 #members = ["holger-traits","holger-rust-repository","holger-ron","holger-cli","holger"]
-members = ["holger-traits","holger-rust-repository","holger-ron","holger-cli"]
+members = ["holger-traits","holger-rust-repository","holger-ron","holger-cli","holger"]
 
 resolver = "2"
