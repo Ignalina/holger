@@ -167,4 +167,56 @@ impl RepositoryBackendTrait for RustRepo {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
+    #[test]
+    fn sparse_path_test_1() {
+        let path = RustRepo::sparse_path("a");
+        assert_eq!(
+            path,
+            RepoPath {
+                p1: "1",
+                p2: "a",
+                name: "a"
+            }
+        );
+    }
+    #[test]
+    fn sparse_path_test_2() {
+        let path = RustRepo::sparse_path("ab");
+        assert_eq!(
+            path,
+            RepoPath {
+                p1: "2",
+                p2: "ab",
+                name: "ab"
+            }
+        );
+    }
+    #[test]
+    fn sparse_path_test_3() {
+        let path = RustRepo::sparse_path("abc");
+        assert_eq!(
+            path,
+            RepoPath {
+                p1: "3",
+                p2: "a",
+                name: "abc"
+            }
+        );
+    }
+    #[test]
+    fn sparse_path_test_n() {
+        let path = RustRepo::sparse_path("abcd");
+        assert_eq!(
+            path,
+            RepoPath {
+                p1: "ab",
+                p2: "cd",
+                name: "abcd"
+            }
+        );
+    }
+}
