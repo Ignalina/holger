@@ -1,16 +1,16 @@
-use sha2::{Sha256, Digest};
-use std::any::Any;
 use anyhow::anyhow;
 use holger_traits::{ArtifactFormat, ArtifactId, RepositoryBackendTrait};
+use sha2::{Digest, Sha256};
+use std::any::Any;
 
 /// Minimal RustRepo example
 pub struct RustRepo {
     pub name: String,
-//    pub format: ArtifactFormat,
+    //    pub format: ArtifactFormat,
     pub artifacts: Vec<ArtifactId>, // cached list of artifacts
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub struct RepoPath<'a> {
     pub p1: &'a str,
     pub p2: &'a str,
@@ -20,7 +20,6 @@ pub struct RepoPath<'a> {
 impl RustRepo {
     pub fn new(name: String) -> Self {
         RustRepo {
-
             // initialize fields if any; if none, leave empty struct
             // Example: name
             // name,
@@ -66,8 +65,8 @@ impl RustRepo {
     }
     #[inline]
     pub fn crate_sha256_hex(data: &[u8]) -> String {
-        use sha2::{Sha256, Digest};
-        use hex::encode; // Add `hex = "0.4"` to Cargo.toml
+        use hex::encode;
+        use sha2::{Digest, Sha256}; // Add `hex = "0.4"` to Cargo.toml
 
         let mut hasher = Sha256::new();
         hasher.update(data);
@@ -75,7 +74,6 @@ impl RustRepo {
         encode(hash) // Convert to lowercase hex string
     }
 }
-
 
 impl RepositoryBackendTrait for RustRepo {
     fn name(&self) -> &str {
@@ -112,8 +110,12 @@ impl RepositoryBackendTrait for RustRepo {
 
             // Sparse crate metadata → /rust-prod/index/se/rd/serde
             [repo, "index", p1, p2, crate_name] if *repo == self.name() => {
-                if let Some(actual_name) = RustRepo::sparse_crate_from_parts(&[p1, p2, crate_name]) {
-                    println!("Sparse crate metadata request: {}/{}/{}", p1, p2, actual_name);
+                if let Some(actual_name) = RustRepo::sparse_crate_from_parts(&[p1, p2, crate_name])
+                {
+                    println!(
+                        "Sparse crate metadata request: {}/{}/{}",
+                        p1, p2, actual_name
+                    );
 
                     let fake_crate_data = b"FAKE_CRATE_CONTENT";
                     let checksum_hex = RustRepo::crate_sha256_hex(fake_crate_data);
@@ -152,7 +154,6 @@ impl RepositoryBackendTrait for RustRepo {
     fn format(&self) -> ArtifactFormat {
         ArtifactFormat::Rust
     }
-
 
     fn is_writable(&self) -> bool {
         todo!()
