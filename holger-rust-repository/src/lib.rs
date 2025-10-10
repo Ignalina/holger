@@ -10,6 +10,13 @@ pub struct RustRepo {
     pub artifacts: Vec<ArtifactId>, // cached list of artifacts
 }
 
+#[derive(Debug)]
+pub struct RepoPath<'a> {
+    pub p1: &'a str,
+    pub p2: &'a str,
+    pub name: &'a str,
+}
+
 impl RustRepo {
     pub fn new(name: String) -> Self {
         RustRepo {
@@ -22,19 +29,30 @@ impl RustRepo {
         }
     }
 
-    /// Convert crate name to Cargo sparse 5-part path (p1, p2, name)
-    pub fn sparse_path(crate_name: &str) -> (String, String, String) {
-        let mut chars = crate_name.chars();
-
-        let p1: String = chars.by_ref().take(2).collect();
-        let mut p2: String = chars.by_ref().take(2).collect();
-
-        // Cargo uses "_" as filler if name is shorter than 4 chars
-        if p2.is_empty() {
-            p2.push('_');
+    /// Convert crate name to Cargo sparse 3-part path (p1, p2, name)
+    pub fn sparse_path<'a>(crate_name: &'a str) -> RepoPath<'a> {
+        match (crate_name, crate_name.len()) {
+            (name, 1) => RepoPath {
+                p1: "1",
+                p2: name,
+                name,
+            },
+            (name, 2) => RepoPath {
+                p1: "2",
+                p2: name,
+                name,
+            },
+            (name, 3) => RepoPath {
+                p1: "3",
+                p2: &name[0..1],
+                name,
+            },
+            (name, _n) => RepoPath {
+                p1: &name[0..2],
+                p2: &name[2..4],
+                name,
+            },
         }
-
-        (p1, p2, crate_name.to_string())
     }
 
     /// Reverse matcher: takes a sparse path slice ["xx","yy","name"] -> crate name
