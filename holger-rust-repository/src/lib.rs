@@ -17,6 +17,12 @@ pub struct RepoPath<'a> {
     pub name: &'a str,
 }
 
+impl<'a> From<RepoPath<'a>> for (&'a str, &'a str, &'a str) {
+    fn from(path: RepoPath<'a>) -> Self {
+        (path.p1, path.p2, path.name)
+    }
+}
+
 impl RustRepo {
     pub fn new(name: String) -> Self {
         RustRepo {
@@ -184,6 +190,7 @@ mod tests {
             }
         );
     }
+
     #[test]
     fn sparse_path_test_2() {
         let path = RustRepo::sparse_path("ab");
@@ -196,6 +203,7 @@ mod tests {
             }
         );
     }
+
     #[test]
     fn sparse_path_test_3() {
         let path = RustRepo::sparse_path("abc");
@@ -208,6 +216,7 @@ mod tests {
             }
         );
     }
+
     #[test]
     fn sparse_path_test_n() {
         let path = RustRepo::sparse_path("abcd");
@@ -219,5 +228,11 @@ mod tests {
                 name: "abcd"
             }
         );
+    }
+
+    #[test]
+    fn sparse_path_into_tuple() {
+        let path: (&str, &str, &str) = RustRepo::sparse_path("abcd").into();
+        assert_eq!(path, ("ab", "cd", "abcd"));
     }
 }
