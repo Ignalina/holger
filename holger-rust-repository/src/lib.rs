@@ -1,19 +1,31 @@
-use sha2::{Sha256, Digest};
-use std::any::Any;
 use anyhow::anyhow;
 use holger_traits::{ArtifactFormat, ArtifactId, RepositoryBackendTrait};
+use sha2::{Digest, Sha256};
+use std::any::Any;
 
 /// Minimal RustRepo example
 pub struct RustRepo {
     pub name: String,
-//    pub format: ArtifactFormat,
+    //    pub format: ArtifactFormat,
     pub artifacts: Vec<ArtifactId>, // cached list of artifacts
+}
+
+#[derive(Debug, PartialEq, PartialOrd)]
+pub struct RepoPath<'a> {
+    pub p1: &'a str,
+    pub p2: &'a str,
+    pub name: &'a str,
+}
+
+impl<'a> From<RepoPath<'a>> for (&'a str, &'a str, &'a str) {
+    fn from(path: RepoPath<'a>) -> Self {
+        (path.p1, path.p2, path.name)
+    }
 }
 
 impl RustRepo {
     pub fn new(name: String) -> Self {
         RustRepo {
-
             // initialize fields if any; if none, leave empty struct
             // Example: name
             // name,
@@ -22,19 +34,30 @@ impl RustRepo {
         }
     }
 
-    /// Convert crate name to Cargo sparse 5-part path (p1, p2, name)
-    pub fn sparse_path(crate_name: &str) -> (String, String, String) {
-        let mut chars = crate_name.chars();
-
-        let p1: String = chars.by_ref().take(2).collect();
-        let mut p2: String = chars.by_ref().take(2).collect();
-
-        // Cargo uses "_" as filler if name is shorter than 4 chars
-        if p2.is_empty() {
-            p2.push('_');
+    /// Convert crate name to Cargo sparse 3-part path (p1, p2, name)
+    pub fn sparse_path<'a>(crate_name: &'a str) -> RepoPath<'a> {
+        match (crate_name, crate_name.len()) {
+            (name, 1) => RepoPath {
+                p1: "1",
+                p2: name,
+                name,
+            },
+            (name, 2) => RepoPath {
+                p1: "2",
+                p2: name,
+                name,
+            },
+            (name, 3) => RepoPath {
+                p1: "3",
+                p2: &name[0..1],
+                name,
+            },
+            (name, _n) => RepoPath {
+                p1: &name[0..2],
+                p2: &name[2..4],
+                name,
+            },
         }
-
-        (p1, p2, crate_name.to_string())
     }
 
     /// Reverse matcher: takes a sparse path slice ["xx","yy","name"] -> crate name
@@ -48,8 +71,8 @@ impl RustRepo {
     }
     #[inline]
     pub fn crate_sha256_hex(data: &[u8]) -> String {
-        use sha2::{Sha256, Digest};
-        use hex::encode; // Add `hex = "0.4"` to Cargo.toml
+        use hex::encode;
+        use sha2::{Digest, Sha256}; // Add `hex = "0.4"` to Cargo.toml
 
         let mut hasher = Sha256::new();
         hasher.update(data);
@@ -57,7 +80,6 @@ impl RustRepo {
         encode(hash) // Convert to lowercase hex string
     }
 }
-
 
 impl RepositoryBackendTrait for RustRepo {
     fn name(&self) -> &str {
@@ -94,8 +116,12 @@ impl RepositoryBackendTrait for RustRepo {
 
             // Sparse crate metadata → /rust-prod/index/se/rd/serde
             [repo, "index", p1, p2, crate_name] if *repo == self.name() => {
-                if let Some(actual_name) = RustRepo::sparse_crate_from_parts(&[p1, p2, crate_name]) {
-                    println!("Sparse crate metadata request: {}/{}/{}", p1, p2, actual_name);
+                if let Some(actual_name) = RustRepo::sparse_crate_from_parts(&[p1, p2, crate_name])
+                {
+                    println!(
+                        "Sparse crate metadata request: {}/{}/{}",
+                        p1, p2, actual_name
+                    );
 
                     let fake_crate_data = b"FAKE_CRATE_CONTENT";
                     let checksum_hex = RustRepo::crate_sha256_hex(fake_crate_data);
@@ -135,7 +161,6 @@ impl RepositoryBackendTrait for RustRepo {
         ArtifactFormat::Rust
     }
 
-
     fn is_writable(&self) -> bool {
         todo!()
     }
@@ -149,4 +174,65 @@ impl RepositoryBackendTrait for RustRepo {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
+    #[test]
+    fn sparse_path_test_1() {
+        let path = RustRepo::sparse_path("a");
+        assert_eq!(
+            path,
+            RepoPath {
+                p1: "1",
+                p2: "a",
+                name: "a"
+            }
+        );
+    }
+
+    #[test]
+    fn sparse_path_test_2() {
+        let path = RustRepo::sparse_path("ab");
+        assert_eq!(
+            path,
+            RepoPath {
+                p1: "2",
+                p2: "ab",
+                name: "ab"
+            }
+        );
+    }
+
+    #[test]
+    fn sparse_path_test_3() {
+        let path = RustRepo::sparse_path("abc");
+        assert_eq!(
+            path,
+            RepoPath {
+                p1: "3",
+                p2: "a",
+                name: "abc"
+            }
+        );
+    }
+
+    #[test]
+    fn sparse_path_test_n() {
+        let path = RustRepo::sparse_path("abcd");
+        assert_eq!(
+            path,
+            RepoPath {
+                p1: "ab",
+                p2: "cd",
+                name: "abcd"
+            }
+        );
+    }
+
+    #[test]
+    fn sparse_path_into_tuple() {
+        let path: (&str, &str, &str) = RustRepo::sparse_path("abcd").into();
+        assert_eq!(path, ("ab", "cd", "abcd"));
+    }
+}
