@@ -26,7 +26,7 @@ anyhow = "1.0.98"
 derivative = "2.2.0"
 #holger-traits = {path="../holger-traits"}
 holger-traits = {version = "0.2.0"}
-#holger-rust-repository = {path ="../holger-rust-repository"}
+#holger-rust-file-repository = {path ="../holger-rust-file-repository"}
 holger-rust-repository = {version = "0.2.0"}
 
 hyper-util = { version = "0.1.16", features = ["tokio"] }

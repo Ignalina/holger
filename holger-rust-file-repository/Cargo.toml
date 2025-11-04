@@ -1,5 +1,5 @@
 [package]
-name = "holger-rust-repository"
+name = "holger-rust-file-repository"
 version = "0.2.0"
 edition = "2021"
 authors = ["Rickard Lundin <rickard@x14.se>","Wilhelm Ågren"]
@@ -9,7 +9,7 @@ license = "MIT"
 repository = "https://github.com/Ignalina/holger"
 readme = "../README.md"
 categories = ["command-line-utilities","development-tools"]
-keywords = ["znippy", "artifacts", "blake3", "cli","airgap"]
+keywords = ["file", "artifacts", "blake3", "cli","airgap"]
 
 
 [dependencies]
