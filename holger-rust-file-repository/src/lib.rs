@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use std::any::Any;
 
 /// Minimal RustRepo example
-pub struct RustRepo {
+pub struct RustRepoFile {
     pub name: String,
     //    pub format: ArtifactFormat,
     pub artifacts: Vec<ArtifactId>, // cached list of artifacts
@@ -23,9 +23,9 @@ impl<'a> From<RepoPath<'a>> for (&'a str, &'a str, &'a str) {
     }
 }
 
-impl RustRepo {
+impl RustRepoFile {
     pub fn new(name: String) -> Self {
-        RustRepo {
+        RustRepoFile {
             // initialize fields if any; if none, leave empty struct
             // Example: name
             // name,
@@ -81,7 +81,7 @@ impl RustRepo {
     }
 }
 
-impl RepositoryBackendTrait for RustRepo {
+impl RepositoryBackendTrait for RustRepoFile {
     fn name(&self) -> &str {
         &self.name
     }
@@ -116,7 +116,7 @@ impl RepositoryBackendTrait for RustRepo {
 
             // Sparse crate metadata → /rust-prod/index/se/rd/serde
             [repo, "index", p1, p2, crate_name] if *repo == self.name() => {
-                if let Some(actual_name) = RustRepo::sparse_crate_from_parts(&[p1, p2, crate_name])
+                if let Some(actual_name) = RustRepoFile::sparse_crate_from_parts(&[p1, p2, crate_name])
                 {
                     println!(
                         "Sparse crate metadata request: {}/{}/{}",
@@ -124,7 +124,7 @@ impl RepositoryBackendTrait for RustRepo {
                     );
 
                     let fake_crate_data = b"FAKE_CRATE_CONTENT";
-                    let checksum_hex = RustRepo::crate_sha256_hex(fake_crate_data);
+                    let checksum_hex = RustRepoFile::crate_sha256_hex(fake_crate_data);
 
                     let json = format!(
                         r#"[{{"vers":"1.0.0","deps":[],"cksum":"{}"}}]"#,
@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn sparse_path_test_1() {
-        let path = RustRepo::sparse_path("a");
+        let path = RustRepoFile::sparse_path("a");
         assert_eq!(
             path,
             RepoPath {
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn sparse_path_test_2() {
-        let path = RustRepo::sparse_path("ab");
+        let path = RustRepoFile::sparse_path("ab");
         assert_eq!(
             path,
             RepoPath {
@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn sparse_path_test_3() {
-        let path = RustRepo::sparse_path("abc");
+        let path = RustRepoFile::sparse_path("abc");
         assert_eq!(
             path,
             RepoPath {
@@ -219,7 +219,7 @@ mod tests {
 
     #[test]
     fn sparse_path_test_n() {
-        let path = RustRepo::sparse_path("abcd");
+        let path = RustRepoFile::sparse_path("abcd");
         assert_eq!(
             path,
             RepoPath {
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn sparse_path_into_tuple() {
-        let path: (&str, &str, &str) = RustRepo::sparse_path("abcd").into();
+        let path: (&str, &str, &str) = RustRepoFile::sparse_path("abcd").into();
         assert_eq!(path, ("ab", "cd", "abcd"));
     }
 }
